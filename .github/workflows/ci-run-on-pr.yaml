@@ -117,3 +117,7 @@ jobs:
       - name: Integration tests
         run: |
           make check-coverage
+        env:
+          PGPASSWORD: postgres
+          PGUSER: postgres
+          PGHOST: 127.0.0.1

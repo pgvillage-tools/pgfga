@@ -22,8 +22,8 @@ type Database struct {
 	State      State      `yaml:"state"`
 }
 
-// newDatabase can be used to create a new Database object
-func newDatabase(handler *Handler, name string, owner string) (d *Database) {
+// NewDatabase can be used to create a new Database object
+func NewDatabase(handler *Handler, name string, owner string) (d *Database) {
 	db, exists := handler.databases[name]
 	if exists {
 		if db.Owner != owner {
@@ -55,6 +55,7 @@ func (d *Database) setDefaults() {
 	}
 }
 
+// getDbConnection returns a database connection
 func (d *Database) getDbConnection() (c *Conn) {
 	if d.conn != nil {
 		return d.conn
@@ -74,7 +75,8 @@ func (d *Database) getDbConnection() (c *Conn) {
 	return d.conn
 }
 
-func (d *Database) drop() (err error) {
+// Drop can be used to drop the database
+func (d *Database) Drop() (err error) {
 	ph := d.handler
 	if !ph.strictOptions.Databases {
 		log.Infof("skipping drop of database %s (not running with strict option for databases", d.name)
@@ -95,7 +97,8 @@ func (d *Database) drop() (err error) {
 	return nil
 }
 
-func (d Database) create() (err error) {
+// Create can be used to make sure the  database
+func (d Database) Create() (err error) {
 	ph := d.handler
 
 	exists, err := ph.conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
@@ -151,10 +154,10 @@ func (d Database) create() (err error) {
 	if err != nil {
 		return err
 	}
-	return d.setReadOnlyGrants(readOnlyRoleName)
+	return d.SetReadOnlyGrants(readOnlyRoleName)
 }
 
-func (d Database) setReadOnlyGrants(readOnlyRoleName string) (err error) {
+func (d Database) SetReadOnlyGrants(readOnlyRoleName string) (err error) {
 	c := d.getDbConnection()
 	err = c.Connect()
 	if err != nil {

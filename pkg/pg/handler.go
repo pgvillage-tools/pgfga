@@ -38,9 +38,10 @@ func (ph *Handler) setDefaults() {
 	}
 }
 
-func (ph *Handler) getDb(dbName string) (d *Database) {
+// RegisterDB is used to register new database with this Handler
+func (ph *Handler) RegisterDB(dbName string) (d *Database) {
 	// NewDatabase does everything we need to do
-	return newDatabase(ph, dbName, "")
+	return NewDatabase(ph, dbName, "")
 }
 
 // GetRole will get the requested role, creating it if needed.
@@ -68,9 +69,9 @@ func (ph *Handler) GrantRole(granteeName string, grantedName string) (err error)
 func (ph *Handler) CreateOrDropDatabases() (err error) {
 	for _, d := range ph.databases {
 		if d.State.Bool() {
-			err = d.create()
+			err = d.Create()
 		} else {
-			err = d.drop()
+			err = d.Drop()
 		}
 		if err != nil {
 			return err

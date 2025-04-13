@@ -88,7 +88,7 @@ func (r *Role) drop() (err error) {
 		} else if scanErr != nil {
 			return fmt.Errorf("error getting ReadOnly grants (qry: %s, err %s)", query, err)
 		}
-		dbConn := ph.getDb(dbname).getDbConnection()
+		dbConn := ph.RegisterDB(dbname).getDbConnection()
 		err = dbConn.runQueryExec(fmt.Sprintf("REASSIGN OWNED BY %s TO %s", identifier(r.name), identifier(newOwner)))
 		if err != nil {
 			return err

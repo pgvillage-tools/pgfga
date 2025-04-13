@@ -53,7 +53,7 @@ func (e *extension) drop() (err error) {
 		return nil
 	}
 
-	dbConn := ph.getDb(e.db.name).getDbConnection()
+	dbConn := ph.RegisterDB(e.db.name).getDbConnection()
 	err = dbConn.runQueryExec("DROP EXTENSION IF EXISTS " + identifier(e.name))
 	if err != nil {
 		return err
