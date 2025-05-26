@@ -2,77 +2,81 @@ package pg
 
 // Handler holds all data for the Handle Method.
 type Handler struct {
-	conn          *Conn
-	strictOptions StrictOptions
-	databases     Databases
-	roles         Roles
-	slots         replicationSlots
+	defaultDB     string
+	connections   Conns
+	StrictOptions StrictOptions
+	Databases     Databases
+	Roles         Roles
+	Grants        Grants
+	Slots         replicationSlots
 }
 
 // NewPgHandler can be used to handle all PostgreSQL actions tha PgFga needs to undertake
-func NewPgHandler(connParams DSN, options StrictOptions, databases Databases, slots []string) (ph *Handler) {
+func NewPgHandler(connParams ConnParams, options StrictOptions, databases Databases, slots []string) (ph *Handler) {
+	connection := NewConn(connParams.Clone())
 	ph = &Handler{
-		conn:          NewConn(connParams),
-		strictOptions: options,
-		databases:     databases,
-		roles:         make(Roles),
-		slots:         make(replicationSlots),
+		defaultDB:     connection.DBName(),
+		connections:   connection.AsConns(),
+		StrictOptions: options,
+		Databases:     databases,
+		Roles:         Roles{"opex": NewRole("opex")},
+		Grants:        Grants{},
+		Slots:         replicationSlots{},
 	}
 	for _, slotName := range slots {
-		slot := newSlot(ph, slotName)
-		ph.slots[slotName] = *slot
+		slot := newSlot(slotName)
+		ph.Slots[slotName] = *slot
 	}
 	ph.setDefaults()
 	return ph
 }
 
-func (ph *Handler) setDefaults() {
-	for name, db := range ph.databases {
-		db.handler = ph
+// getDBConnection returns a postgres connection that is connected to the specified Postgres database
+func (h *Handler) getPrimaryConnection() (dbConn Conn) {
+	primaryConn, exists := h.connections[h.defaultDB]
+	if !exists {
+		panic("we should have a default database connection by now, but it does not seem to be set")
+	}
+	return primaryConn
+}
+
+func (h *Handler) setDefaults() {
+	for name, db := range h.Databases {
 		db.name = name
 		db.setDefaults()
 	}
-	for name, rs := range ph.slots {
-		rs.handler = ph
+	for name, rs := range h.Slots {
 		rs.name = name
 	}
 }
 
-// RegisterDB is used to register new database with this Handler
-func (ph *Handler) RegisterDB(dbName string) (d *Database) {
-	// NewDatabase does everything we need to do
-	return NewDatabase(ph, dbName, "")
-}
-
 // GetRole will get the requested role, creating it if needed.
-func (ph *Handler) GetRole(roleName string) (d *Role, err error) {
-	// NewRole does everything we need to do
-	return NewRole(ph, roleName, RoleOptionMap{}, Present)
+func (h *Handler) GetRole(roleName string) (r Role) {
+	if r, exists := h.Roles[roleName]; exists {
+		return r
+	}
+	r = NewRole(roleName)
+	h.Roles[roleName] = r
+	return r
 }
 
-// GrantRole will grant a role to to another user / role
-func (ph *Handler) GrantRole(granteeName string, grantedName string) (err error) {
-	// NewDatabase does everything we need to do
-	grantee, err := ph.GetRole(granteeName)
-	if err != nil {
-		return err
-	}
-	granted, err := ph.GetRole(grantedName)
-	if err != nil {
-		return err
-	}
-	return grantee.GrantRole(granted)
+// Grant can be used to update the list of grants for granting the granted role to the grantee
+func (h *Handler) Grant(grantee string, granted string) {
+	grantedRole := h.GetRole(granted)
+	granteeRole := h.GetRole(grantee)
+	h.Grants = h.Grants.Append(Grant{Grantee: granteeRole, Granted: grantedRole})
 }
 
-// CreateOrDropDatabases will create databases if needed, and (if strict option is enabled for databases) will drop
-// databases that should not exist.
-func (ph *Handler) CreateOrDropDatabases() (err error) {
-	for _, d := range ph.databases {
-		if d.State.Bool() {
-			err = d.Create()
-		} else {
-			err = d.Drop()
-		}
+// Reconcile can be used to reconcile all objects as defined in this handler object
+func (h *Handler) Reconcile() (err error) {
+	primaryConnection := h.getPrimaryConnection()
+	for _, recFunc := range []func(Conn) error{
+		h.Roles.reconcile,
+		h.Grants.reconcile,
+		h.Databases.reconcile,
+		h.Slots.reconcile,
+	} {
+		err := recFunc(primaryConnection)
 		if err != nil {
 			return err
 		}
@@ -80,15 +84,16 @@ func (ph *Handler) CreateOrDropDatabases() (err error) {
 	return nil
 }
 
-// CreateOrDropSlots will create database slots if needed, and (if strict option is enabled for databases) will drop
-// slots that should not exist.
-func (ph *Handler) CreateOrDropSlots() (err error) {
-	for _, d := range ph.slots {
-		if d.State.Bool() {
-			err = d.create()
-		} else {
-			err = d.drop()
-		}
+// Finalize can be used to clean all objects if they are no longer required
+func (h *Handler) Finalize() (err error) {
+	primaryConnection := h.getPrimaryConnection()
+	for _, recFunc := range []func(Conn) error{
+		h.Databases.finalize,
+		h.Grants.finalize,
+		h.Roles.finalize,
+		h.Slots.finalize,
+	} {
+		err := recFunc(primaryConnection)
 		if err != nil {
 			return err
 		}

@@ -8,39 +8,49 @@ import (
 )
 
 // Databases is a map of all known Database objects
-type Databases map[string]*Database
+type Databases map[string]Database
+
+// reconcile can be used to grant or revoke all Databases.
+func (d Databases) reconcile(primaryConn Conn) (err error) {
+	for _, db := range d {
+		dbConn := primaryConn.SwitchDB(db.name)
+		err := db.reconcile(dbConn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcile can be used to grant or revoke all Databases.
+func (d Databases) finalize(primaryConn Conn) (err error) {
+	for _, db := range d {
+		dbConn := primaryConn.SwitchDB(db.name)
+		err := db.drop(dbConn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Database is a struct that can hold database information
 type Database struct {
 	// for DB's created from yaml, handler and name are set by the pg.Handler
-	handler *Handler
-	name    string
-	// conn is created from handler when required
-	conn       *Conn
+	name       string
 	Owner      string     `yaml:"Owner"`
 	Extensions extensions `yaml:"extensions"`
 	State      State      `yaml:"state"`
 }
 
 // NewDatabase can be used to create a new Database object
-func NewDatabase(handler *Handler, name string, owner string) (d *Database) {
-	db, exists := handler.databases[name]
-	if exists {
-		if db.Owner != owner {
-			log.Debugf("Warning: DB %s already exists with different Owner %s. Changing to Owner %s.", name,
-				db.Owner, owner)
-			db.Owner = owner
-		}
-		return db
-	}
-	d = &Database{
-		handler:    handler,
+func NewDatabase(name string, owner string) (d Database) {
+	d = Database{
 		name:       name,
 		Owner:      owner,
 		Extensions: make(extensions),
 	}
 	d.setDefaults()
-	handler.databases[name] = d
 	return d
 }
 
@@ -50,44 +60,40 @@ func (d *Database) setDefaults() {
 		d.Owner = d.name
 	}
 	for name, ext := range d.Extensions {
-		ext.db = d
 		ext.name = name
 	}
 }
 
-// getDbConnection returns a database connection
-func (d *Database) getDbConnection() (c *Conn) {
-	if d.conn != nil {
-		return d.conn
-	}
-	// not yet initialized. Let's initialize
-	if d.handler.conn.DBName() == d.name {
-		d.conn = d.handler.conn
-		return d.conn
-	}
-
-	connParams := map[string]string{}
-	for key, value := range d.handler.conn.connParams {
-		connParams[key] = value
-	}
-	connParams["dbname"] = d.name
-	d.conn = NewConn(connParams)
-	return d.conn
-}
-
-// Drop can be used to drop the database
-func (d *Database) Drop() (err error) {
-	ph := d.handler
-	if !ph.strictOptions.Databases {
-		log.Infof("skipping drop of database %s (not running with strict option for databases", d.name)
+// reconcile can be used to grant or revoke all Roles.
+func (d *Database) reconcile(conn Conn) (err error) {
+	if d.State != Present {
 		return nil
 	}
-	exists, err := ph.conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
+	for _, recFunc := range []func(Conn) error{
+		d.create,
+		d.reconcileOwner,
+		d.reconcileReadOnlyGrants,
+		d.Extensions.reconcile,
+	} {
+		err := recFunc(conn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Finalize can be used to drop the database
+func (d *Database) drop(conn Conn) (err error) {
+	if d.State != Absent {
+		return nil
+	}
+	exists, err := conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
 	if err != nil {
 		return err
 	}
 	if exists {
-		err = ph.conn.runQueryExec(fmt.Sprintf("drop database %s", identifier(d.name)))
+		err = conn.runQueryExec(fmt.Sprintf("DROP DATABASE %s", identifier(d.name)))
 		if err != nil {
 			return err
 		}
@@ -97,22 +103,10 @@ func (d *Database) Drop() (err error) {
 	return nil
 }
 
-// Create can be used to make sure the  database
-func (d Database) Create() (err error) {
-	ph := d.handler
-
-	exists, err := ph.conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		err = ph.conn.runQueryExec(fmt.Sprintf("CREATE DATABASE %s", identifier(d.name)))
-		if err != nil {
-			return err
-		}
-		log.Infof("Database '%s' successfully created", d.name)
-	}
-	exists, err = ph.conn.runQueryExists(
+// Create can be used to make sure the database exists
+func (d Database) reconcileOwner(conn Conn) (err error) {
+	// Check if the owner is properly set
+	if hasProperOwner, err := conn.runQueryExists(
 		`SELECT datname
 		FROM pg_database db
 		INNER JOIN pg_roles rol
@@ -121,44 +115,43 @@ func (d Database) Create() (err error) {
 		AND rolname = $2`,
 		d.name,
 		d.Owner,
-	)
+	); err != nil {
+		return err
+	} else if hasProperOwner {
+		return nil
+	}
+	if ownerExists, err := NewRole(d.Owner).exists(conn); err != nil {
+		return err
+	} else if !ownerExists {
+		return fmt.Errorf("database should have owner that does not exist")
+	}
+	if err = conn.runQueryExec(
+		fmt.Sprintf("ALTER DATABASE %s OWNER TO %s", identifier(d.name), identifier(d.Owner)),
+	); err != nil {
+		return err
+	}
+	log.Infof("Database Owner successfully altered to '%s' on '%s'", d.Owner, d.name)
+	return nil
+}
+
+// Create can be used to make sure the database exists
+func (d Database) create(conn Conn) (err error) {
+	exists, err := conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
 	if err != nil {
 		return err
 	}
 	if !exists {
-		// First make sure role exists
-		_, err = d.handler.GetRole(d.Owner)
+		err = conn.runQueryExec(fmt.Sprintf("CREATE DATABASE %s", identifier(d.name)))
 		if err != nil {
 			return err
 		}
-		// Then set Owner
-		err = ph.conn.runQueryExec(
-			fmt.Sprintf("ALTER DATABASE %s OWNER TO %s", identifier(d.name), identifier(d.Owner)),
-		)
-		if err != nil {
-			return err
-		}
-		log.Infof("Database Owner successfully altered to '%s' on '%s'",
-			d.Owner, d.name)
+		log.Infof("Database '%s' successfully created", d.name)
 	}
-	err = d.createOrDropExtensions()
-	if err != nil {
-		return err
-	}
-	err = ph.GrantRole(d.Owner, "opex")
-	if err != nil {
-		return err
-	}
-	readOnlyRoleName := fmt.Sprintf("%s_readonly", d.name)
-	err = ph.GrantRole(readOnlyRoleName, "readonly")
-	if err != nil {
-		return err
-	}
-	return d.SetReadOnlyGrants(readOnlyRoleName)
+	return nil
 }
 
-func (d Database) SetReadOnlyGrants(readOnlyRoleName string) (err error) {
-	c := d.getDbConnection()
+func (d Database) reconcileReadOnlyGrants(c Conn) (err error) {
+	readOnlyRoleName := fmt.Sprintf("%s_readonly", d.name)
 	err = c.Connect()
 	if err != nil {
 		return err
@@ -188,31 +181,6 @@ func (d Database) SetReadOnlyGrants(readOnlyRoleName string) (err error) {
 		}
 		log.Infof("successfully granted SELECT ON ALL TABLES in schema '%s' in DB '%s' to '%s'",
 			schema, d.name, readOnlyRoleName)
-	}
-	return nil
-}
-
-/*
-func (d *Database) addExtension(name string, schema string, version string) (e *extension, err error) {
-	e, err = newExtension(d, name, schema, version)
-	if err != nil {
-		return nil, err
-	}
-	d.Extensions[name] = e
-	return e, nil
-}
-*/
-
-func (d *Database) createOrDropExtensions() (err error) {
-	for _, e := range d.Extensions {
-		if e.State.Bool() {
-			err = e.create()
-		} else {
-			err = e.drop()
-		}
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

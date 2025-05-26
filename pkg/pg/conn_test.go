@@ -8,18 +8,18 @@ import (
 )
 
 var _ = Describe("Conn", func() {
-	var myConn *pg.Conn
+	var myConn pg.Conn
 	BeforeEach(func() {
-		myConn = pg.NewConn(pg.DSN{})
+		myConn = pg.NewConn(pg.ConnParams{})
 	})
 	Describe("Connecting", func() {
 		Context("with default connection parameters", func() {
 			It("should succeed", func() {
 				connectError := myConn.Connect()
-				Expect(connectError).NotTo(HaveOccurred())
-				Expect(myConn.DBName()).NotTo(BeEmpty())
-				Expect(myConn.UserName()).NotTo(BeEmpty())
-				Expect(myConn.DSN()).To(BeEmpty())
+				Ω(connectError).NotTo(HaveOccurred())
+				Ω(myConn.DBName()).NotTo(BeEmpty())
+				Ω(myConn.UserName()).NotTo(BeEmpty())
+				Ω(myConn.ConnParams()).To(BeEmpty())
 			})
 		})
 	})
