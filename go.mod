@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/go-ldap/ldap/v3 v3.3.0
-	github.com/jackc/pgx/v4 v4.18.2
+	github.com/jackc/pgx/v4 v4.18.3
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.18.1
 	gopkg.in/yaml.v2 v2.4.0
