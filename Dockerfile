@@ -1,7 +1,7 @@
 
 # Build the manager binary
 
-FROM --platform=${BUILDPLATFORM} docker.io/golang:1.23 AS builder
+FROM --platform=${BUILDPLATFORM} docker.io/golang:1.24 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
