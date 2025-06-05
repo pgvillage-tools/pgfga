@@ -56,7 +56,7 @@ type FgaConfig struct {
 	GeneralConfig FgaGeneralConfig         `yaml:"general"`
 	StrictConfig  pg.StrictOptions         `yaml:"strict"`
 	LdapConfig    ldap.Config              `yaml:"ldap"`
-	PgDsn         pg.DSN                   `yaml:"postgresql_dsn"`
+	PgDsn         pg.ConnParams            `yaml:"postgresql_dsn"`
 	DbsConfig     pg.Databases             `yaml:"databases"`
 	UserConfig    map[string]FgaUserConfig `yaml:"users"`
 	Roles         map[string]FgaRoleConfig `yaml:"roles"`

@@ -12,15 +12,30 @@ import (
 
 // Conn is a smart PostgreSQL connection, which means that it has layers of methods
 type Conn struct {
-	connParams DSN
+	connParams ConnParams
 	conn       *pgx.Conn
 }
 
 // NewConn returns a connection with connection parameters set
-func NewConn(connParams DSN) (c *Conn) {
-	return &Conn{
+func NewConn(connParams ConnParams) (c Conn) {
+	return Conn{
 		connParams: connParams,
 	}
+}
+
+// Conns is a map of Conn items
+type Conns map[string]Conn
+
+// AsConns returns a postgres connection that is connected to the specified Postgres database
+func (c Conn) AsConns() Conns {
+	return Conns{c.DBName(): c}
+}
+
+// SwitchDB returns a postgres connection that is connected to the specified Postgres database
+func (c Conn) SwitchDB(db string) Conn {
+	dsn := c.connParams.Clone()
+	dsn[ConnParamDBName] = db
+	return NewConn(dsn)
 }
 
 // DBName retrieves and returns the name of the database that Conn is connected to
@@ -53,8 +68,8 @@ func (c *Conn) UserName() (userName string) {
 	return currentUser.Username
 }
 
-// DSN returns a copy of the DSN
-func (c *Conn) DSN() (dsn DSN) {
+// ConnParams returns a copy of the ConnParams
+func (c *Conn) ConnParams() (dsn ConnParams) {
 	return c.connParams.Clone()
 }
 
@@ -68,7 +83,7 @@ func (c *Conn) Connect() (err error) {
 		}
 		c.conn = nil
 	}
-	c.conn, err = pgx.Connect(context.Background(), c.DSN().String())
+	c.conn, err = pgx.Connect(context.Background(), c.ConnParams().String())
 	if err != nil {
 		c.conn = nil
 		return err

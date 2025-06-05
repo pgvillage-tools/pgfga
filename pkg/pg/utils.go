@@ -14,8 +14,3 @@ func identifier(objectName string) (escaped string) {
 func quotedSQLValue(objectName string) (escaped string) {
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(objectName, "'", "''"))
 }
-
-// connectStringValue uses proper quoting for connect string values
-func connectStringValue(objectName string) (escaped string) {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(objectName, "'", "\\'"))
-}
