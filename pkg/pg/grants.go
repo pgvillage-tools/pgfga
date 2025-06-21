@@ -94,7 +94,12 @@ func (g Grant) revoke(conn Conn) (err error) {
 		return err
 	}
 	if exists {
-		err = conn.runQueryExec(fmt.Sprintf("REVOKE %s FROM %s", identifier(g.Grantee.Name), identifier(g.Granted.Name)))
+		err = conn.runQueryExec(
+			fmt.Sprintf(
+				"REVOKE %s FROM %s",
+				identifier(g.Grantee.Name),
+				identifier(g.Granted.Name)),
+		)
 		if err != nil {
 			return err
 		}

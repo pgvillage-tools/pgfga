@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v4"
@@ -123,7 +124,7 @@ func (d Database) reconcileOwner(conn Conn) (err error) {
 	if ownerExists, err := NewRole(d.Owner).exists(conn); err != nil {
 		return err
 	} else if !ownerExists {
-		return fmt.Errorf("database should have owner that does not exist")
+		return errors.New("database should have owner that does not exist")
 	}
 	if err = conn.runQueryExec(
 		fmt.Sprintf("ALTER DATABASE %s OWNER TO %s", identifier(d.name), identifier(d.Owner)),

@@ -67,8 +67,12 @@ func (e extension) create(conn Conn) (err error) {
 	if !exists {
 		return fmt.Errorf("extension %s is not available", e.name)
 	}
-	exists, err = conn.runQueryExists("SELECT name FROM pg_available_extension_versions WHERE name = $1 AND version = $2",
-		e.name, e.Version)
+	exists, err = conn.runQueryExists(
+		//revive:disable-next-line
+		"SELECT name FROM pg_available_extension_versions WHERE name = $1 AND version = $2",
+		e.name,
+		e.Version,
+	)
 	if err != nil {
 		return err
 	}
@@ -102,7 +106,10 @@ func (e extension) reconcileVersion(conn Conn) (err error) {
 		return nil
 	}
 	if e.Version != "" {
-		currentVersion, err := conn.runQueryGetOneField("SELECT extversion FROM pg_extension WHERE extname = $1", e.name)
+		currentVersion, err := conn.runQueryGetOneField(
+			//revive:disable-next-line
+			"SELECT extversion FROM pg_extension WHERE extname = $1",
+			e.name)
 		if err != nil {
 			return err
 		}

@@ -10,8 +10,10 @@ func connectStringValue(objectName string) (escaped string) {
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(objectName, "'", "\\'"))
 }
 
+// ConnParamKey represents the key of a connection string parameter
 type ConnParamKey string
 
+// In a connect string, the dbname key point to the database name
 const (
 	ConnParamDBName ConnParamKey = "dbname"
 )

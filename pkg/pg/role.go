@@ -115,7 +115,7 @@ func (r Role) reconcile(conn Conn) (err error) {
 	return nil
 }
 
-func (r Role) drop(c Conn) (err error) {
+func (r *Role) drop(c Conn) (err error) {
 	if r.State != Absent {
 		return nil
 	}
