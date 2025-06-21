@@ -2,6 +2,8 @@ package pg
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -24,8 +26,15 @@ type ConnParams map[ConnParamKey]string
 // String joins all Connection Parameters into a connection string
 func (dsn ConnParams) String() string {
 	var pairs []string
-	for key, value := range dsn {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", key, connectStringValue(value)))
+	dsnSortedKeys := slices.Sorted(maps.Keys(dsn))
+	for _, key := range dsnSortedKeys {
+		pairs = append(pairs,
+			fmt.Sprintf(
+				"%s=%s",
+				key,
+				connectStringValue(dsn[key]),
+			),
+		)
 	}
 	return strings.Join(pairs[:], " ")
 }
