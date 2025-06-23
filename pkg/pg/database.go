@@ -13,9 +13,9 @@ type Databases map[string]Database
 
 // reconcile can be used to grant or revoke all Databases.
 func (d Databases) reconcile(primaryConn Conn) (err error) {
-	for _, db := range d {
-		dbConn := primaryConn.SwitchDB(db.name)
-		err := db.reconcile(dbConn)
+	for dbName, db := range d {
+		db.name = dbName
+		err := db.reconcilePrimaryCon(primaryConn)
 		if err != nil {
 			return err
 		}
@@ -26,8 +26,7 @@ func (d Databases) reconcile(primaryConn Conn) (err error) {
 // reconcile can be used to grant or revoke all Databases.
 func (d Databases) finalize(primaryConn Conn) (err error) {
 	for _, db := range d {
-		dbConn := primaryConn.SwitchDB(db.name)
-		err := db.drop(dbConn)
+		err := db.drop(primaryConn)
 		if err != nil {
 			return err
 		}
@@ -66,17 +65,32 @@ func (d *Database) setDefaults() {
 }
 
 // reconcile can be used to grant or revoke all Roles.
-func (d *Database) reconcile(conn Conn) (err error) {
+func (d *Database) reconcilePrimaryCon(conn Conn) (err error) {
 	if d.State != Present {
 		return nil
 	}
 	for _, recFunc := range []func(Conn) error{
 		d.create,
 		d.reconcileOwner,
-		d.reconcileReadOnlyGrants,
-		d.Extensions.reconcile,
+		d.reconcileDbCon,
 	} {
 		err := recFunc(conn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcile can be used to grant or revoke all Roles.
+func (d *Database) reconcileDbCon(primaryConn Conn) (err error) {
+	dbConn := primaryConn.SwitchDB(d.name)
+	for _, recFunc := range []func(Conn) error{
+		d.reconcileReadOnlyGrants,
+		d.reconcileReadWriteGrants,
+		d.reconcileExtensions,
+	} {
+		err := recFunc(dbConn)
 		if err != nil {
 			return err
 		}
@@ -107,6 +121,9 @@ func (d *Database) drop(conn Conn) (err error) {
 // Create can be used to make sure the database exists
 func (d Database) reconcileOwner(conn Conn) (err error) {
 	// Check if the owner is properly set
+	if d.Owner == "" {
+		d.Owner = d.name
+	}
 	if hasProperOwner, err := conn.runQueryExists(
 		`SELECT datname
 		FROM pg_database db
@@ -124,7 +141,7 @@ func (d Database) reconcileOwner(conn Conn) (err error) {
 	if ownerExists, err := NewRole(d.Owner).exists(conn); err != nil {
 		return err
 	} else if !ownerExists {
-		return errors.New("database should have owner that does not exist")
+		return errors.New("database should have owner that exists")
 	}
 	if err = conn.runQueryExec(
 		fmt.Sprintf("ALTER DATABASE %s OWNER TO %s", identifier(d.name), identifier(d.Owner)),
@@ -151,9 +168,14 @@ func (d Database) create(conn Conn) (err error) {
 	return nil
 }
 
-func (d Database) reconcileReadOnlyGrants(c Conn) (err error) {
+// reconcileExtensions can be used to make sure the database exists
+func (d Database) reconcileExtensions(dbConn Conn) (err error) {
+	return d.Extensions.reconcile(dbConn)
+}
+
+func (d Database) reconcileReadOnlyGrants(dbConn Conn) (err error) {
 	readOnlyRoleName := fmt.Sprintf("%s_readonly", d.name)
-	err = c.Connect()
+	err = dbConn.Connect()
 	if err != nil {
 		return err
 	}
@@ -164,7 +186,7 @@ func (d Database) reconcileReadOnlyGrants(c Conn) (err error) {
 			  and schemaname||'.'||tablename not in (SELECT table_schema||'.'||table_name
                   FROM information_schema.role_table_grants
                   WHERE grantee = $1 and privilege_type = 'SELECT')`
-	row := c.conn.QueryRow(context.Background(), query, readOnlyRoleName)
+	row := dbConn.conn.QueryRow(context.Background(), query, readOnlyRoleName)
 	for {
 		scanErr := row.Scan(&schema)
 		if scanErr == pgx.ErrNoRows {
@@ -175,13 +197,59 @@ func (d Database) reconcileReadOnlyGrants(c Conn) (err error) {
 		schemas = append(schemas, schema)
 	}
 	for _, schema := range schemas {
-		err = c.runQueryExec(fmt.Sprintf("GRANT SELECT ON ALL TABLES IN SCHEMA %s TO %s", identifier(schema),
+		err = dbConn.runQueryExec(fmt.Sprintf("GRANT SELECT ON ALL TABLES IN SCHEMA %s TO %s", identifier(schema),
 			identifier(readOnlyRoleName)))
 		if err != nil {
 			return err
 		}
 		log.Infof("successfully granted SELECT ON ALL TABLES in schema '%s' in DB '%s' to '%s'",
 			schema, d.name, readOnlyRoleName)
+	}
+	return nil
+}
+
+func (d Database) reconcileReadWriteGrants(dbConn Conn) (err error) {
+	readWriteRoleName := fmt.Sprintf("%s_readwrite", d.name)
+	err = dbConn.Connect()
+	if err != nil {
+		return err
+	}
+	var schema string
+	var schemas []string
+	query := `select distinct schemaname from pg_tables
+              where schemaname not in ('pg_catalog','information_schema')
+			  and schemaname||'.'||tablename not in (
+			      SELECT table_schema||'.'||table_name
+                  FROM information_schema.role_table_grants
+                  WHERE grantee = $1 and privilege_type in 
+				    ('SELECT','INSERT','UPDATE','DELETE','TRUNCATE')
+				  GROUP BY table_schema||'.'||table_name
+				  HAVING COUNT(*) = 5
+				  )`
+	row := dbConn.conn.QueryRow(context.Background(), query, readWriteRoleName)
+	for {
+		scanErr := row.Scan(&schema)
+		if scanErr == pgx.ErrNoRows {
+			break
+		} else if scanErr != nil {
+			return fmt.Errorf("error getting ReadWrite grants (qry: %s, err %s)", query, err)
+		}
+		schemas = append(schemas, schema)
+	}
+	for _, schema := range schemas {
+		err = dbConn.runQueryExec(
+			fmt.Sprintf(
+				"GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA %s TO %s",
+				identifier(schema),
+				identifier(readWriteRoleName),
+			),
+		)
+		if err != nil {
+			return err
+		}
+		//revive:disable-next-line
+		log.Infof("successfully granted SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES in schema '%s' in DB '%s' to '%s'",
+			schema, d.name, readWriteRoleName)
 	}
 	return nil
 }

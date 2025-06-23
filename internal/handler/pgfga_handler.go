@@ -69,6 +69,8 @@ func (pfh PgFgaHandler) Handle() error {
 	for _, subHandler := range []func() error{
 		pfh.handleRoles,
 		pfh.handleUsers,
+		pfh.handleDatabases,
+		pfh.handleDbRoles,
 	} {
 		err := subHandler()
 		if err != nil {
@@ -194,5 +196,42 @@ func (pfh PgFgaHandler) handleRoles() (err error) {
 			}
 		}
 	}
+	return nil
+}
+
+func (pfh *PgFgaHandler) handleDbRoles() (err error) {
+	for dbName, dbConfig := range pfh.config.DbsConfig {
+		if dbConfig.State == pg.Absent {
+			continue
+		}
+		owner := dbConfig.Owner
+		if owner == "" {
+			owner = dbName
+		}
+		options := pg.RoleOptionMap{pg.RoleCreateDB: true}
+
+		role := pfh.pg.GetRole(owner)
+		if role.Options == nil {
+			role.Options = options
+		} else {
+			role.Options = role.Options.Merge(options)
+		}
+		pfh.pg.Roles.AddRole(role)
+
+		for _, roleKind := range []string{"readonly", "readwrite"} {
+			kindRoleName := fmt.Sprintf("%s_%s", dbName, roleKind)
+			kindRole := pfh.pg.GetRole(kindRoleName)
+			if kindRole.Options == nil {
+				kindRole.Options = pg.RoleOptionMap{}
+			}
+			pfh.pg.Roles.AddRole(kindRole)
+		}
+		pfh.pg.Grant("opex", fmt.Sprintf("%s_readwrite", dbName))
+	}
+	return nil
+}
+
+func (pfh *PgFgaHandler) handleDatabases() (err error) {
+	pfh.pg.Databases = pfh.config.DbsConfig
 	return nil
 }
