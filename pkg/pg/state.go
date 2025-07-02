@@ -8,6 +8,7 @@ import (
 const (
 	statePresent = iota
 	stateAbsent
+	stateAllowed
 )
 
 // State represents the state of a pg object (Present or Absent)
@@ -20,10 +21,13 @@ var (
 	Present = State{statePresent}
 	// Absent means the object should be removed
 	Absent = State{stateAbsent}
+	// Allowed means that object can exist but is not required to
+	Allowed = State{stateAllowed}
 
 	toState = map[string]State{
 		"present": Present,
 		"absent":  Absent,
+		"allowed": Allowed,
 		"":        Present,
 	}
 )
@@ -33,11 +37,6 @@ func (s State) String() string {
 		return "Absent"
 	}
 	return "Present"
-}
-
-// Bool returns true for present and false for absent
-func (s State) Bool() bool {
-	return s.value == statePresent
 }
 
 // MarshalYAML marshals the enum as a quoted json string

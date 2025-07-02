@@ -55,3 +55,12 @@ func (rom RoleOptionMap) AddAbsolute(opt RoleOption) RoleOptionMap {
 	rom[opt.Absolute()] = opt.Enabled()
 	return rom
 }
+
+// IsEnabled checks an option in the
+func (rom RoleOptionMap) IsEnabled(opt RoleOption) bool {
+	enabled, exists := rom[opt]
+	if !exists {
+		return false
+	}
+	return enabled
+}

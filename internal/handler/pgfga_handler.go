@@ -63,20 +63,21 @@ func NewPgFgaHandler() (pfh *PgFgaHandler, err error) {
 }
 
 // Handle will do all the heavy lifting of handling a PgFga run
-func (pfh PgFgaHandler) Handle() {
+func (pfh PgFgaHandler) Handle() error {
 	time.Sleep(pfh.config.GeneralConfig.RunDelay)
 
 	for _, subHandler := range []func() error{
 		pfh.handleRoles,
 		pfh.handleUsers,
 		pfh.handleDatabases,
-		pfh.handleSlots,
+		pfh.handleDbRoles,
 	} {
 		err := subHandler()
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+	return pfh.pg.Reconcile()
 }
 
 func (pfh PgFgaHandler) handleLdapGroup(
@@ -92,23 +93,14 @@ func (pfh PgFgaHandler) handleLdapGroup(
 	if err != nil {
 		return err
 	}
-	baseRole, err := pg.NewRole(pfh.pg, baseGroup.Name(), options, userConfig.State)
-	if err != nil {
-		return err
-	}
-	err = baseRole.ResetPassword()
-	if err != nil {
-		return err
-	}
+	pfh.pg.Roles.AddRole(pg.Role{
+		Name:    baseGroup.Name(),
+		Options: options,
+		State:   userConfig.State,
+	})
 	for _, ms := range baseGroup.MembershipTree() {
-		_, err = pg.NewRole(pfh.pg, ms.GetMember().Name(), pg.RoleOptionMap{pg.RoleLogin: true}, userConfig.State)
-		if err != nil {
-			return err
-		}
-		err = pfh.pg.GrantRole(ms.GetMember().Name(), baseGroup.Name())
-		if err != nil {
-			return err
-		}
+		pfh.handleLdapUser(userConfig, ms.GetMember().Name(), &pg.RoleOptionMap{})
+		pfh.pg.Grant(ms.GetMember().Name(), baseGroup.Name())
 	}
 	return nil
 }
@@ -120,20 +112,16 @@ func (pfh PgFgaHandler) handleLdapUser(
 ) (err error) {
 	log.Debugf("Configuring user %s with %s", userName, userConfig.Auth)
 	options.AddAbsolute(pg.RoleLogin)
-	user, err := pg.NewRole(pfh.pg, userName, *options, userConfig.State)
-	if err != nil {
-		return err
+	for _, opt := range userConfig.Options {
+		options.AddAbsolute(pg.RoleOption(opt))
 	}
-	err = user.ResetPassword()
-	if err != nil {
-		return err
-	}
-	if userConfig.State.Bool() {
+	user := pfh.pg.GetRole(userName)
+	user.Options = *options
+	user.State = userConfig.State
+	pfh.pg.Roles.AddRole(user)
+	if userConfig.State == pg.Present {
 		for _, granted := range userConfig.MemberOf {
-			err := pfh.pg.GrantRole(userName, granted)
-			if err != nil {
-				return err
-			}
+			pfh.pg.Grant(userName, granted)
 		}
 	}
 	return nil
@@ -145,18 +133,13 @@ func (pfh PgFgaHandler) handlePasswordUser(
 	options *pg.RoleOptionMap,
 ) (err error) {
 	options.AddAbsolute(pg.RoleLogin)
-	user, err := pg.NewRole(pfh.pg, userName, *options, userConfig.State)
-	if err != nil {
-		return err
-	}
-	// Note: if no password is set, it will be reset...
-	err = user.SetPassword(userConfig.Password)
-	if err != nil {
-		return err
-	}
-	err = user.SetExpiry(userConfig.Expiry)
-	if err != nil {
-		return err
+	user := pfh.pg.GetRole(userName)
+	user.Options = *options
+	user.State = userConfig.State
+	pfh.pg.Roles.AddRole(user)
+	if userConfig.State == pg.Present {
+		user.Password = userConfig.Password
+		user.Expiry = userConfig.Expiry
 	}
 	return nil
 }
@@ -191,10 +174,6 @@ func (pfh PgFgaHandler) handleUsers() (err error) {
 	return nil
 }
 
-func (pfh PgFgaHandler) handleDatabases() (err error) {
-	return pfh.pg.CreateOrDropDatabases()
-}
-
 func (pfh PgFgaHandler) handleRoles() (err error) {
 	for roleName, roleConfig := range pfh.config.Roles {
 		options := pg.RoleOptionMap{}
@@ -205,24 +184,54 @@ func (pfh PgFgaHandler) handleRoles() (err error) {
 			}
 			options[option] = option.Enabled()
 		}
-		role, err := pg.NewRole(pfh.pg, roleName, options, roleConfig.State)
-		if err != nil {
-			return err
-		}
-		for _, groupName := range roleConfig.MemberOf {
-			group, err := pfh.pg.GetRole(groupName)
-			if err != nil {
-				return err
-			}
-			err = role.GrantRole(group)
-			if err != nil {
-				return err
+
+		role := pfh.pg.GetRole(roleName)
+		role.Options = options
+		role.State = roleConfig.State
+		pfh.pg.Roles.AddRole(role)
+
+		if roleConfig.State == pg.Present {
+			for _, granted := range roleConfig.MemberOf {
+				pfh.pg.Grant(roleName, granted)
 			}
 		}
 	}
 	return nil
 }
 
-func (pfh PgFgaHandler) handleSlots() (err error) {
-	return pfh.pg.CreateOrDropSlots()
+func (pfh *PgFgaHandler) handleDbRoles() (err error) {
+	for dbName, dbConfig := range pfh.config.DbsConfig {
+		if dbConfig.State == pg.Absent {
+			continue
+		}
+		owner := dbConfig.Owner
+		if owner == "" {
+			owner = dbName
+		}
+		options := pg.RoleOptionMap{pg.RoleCreateDB: true}
+
+		role := pfh.pg.GetRole(owner)
+		if role.Options == nil {
+			role.Options = options
+		} else {
+			role.Options = role.Options.Merge(options)
+		}
+		pfh.pg.Roles.AddRole(role)
+
+		for _, roleKind := range []string{"readonly", "readwrite"} {
+			kindRoleName := fmt.Sprintf("%s_%s", dbName, roleKind)
+			kindRole := pfh.pg.GetRole(kindRoleName)
+			if kindRole.Options == nil {
+				kindRole.Options = pg.RoleOptionMap{}
+			}
+			pfh.pg.Roles.AddRole(kindRole)
+		}
+		pfh.pg.Grant("opex", fmt.Sprintf("%s_readwrite", dbName))
+	}
+	return nil
+}
+
+func (pfh *PgFgaHandler) handleDatabases() (err error) {
+	pfh.pg.Databases = pfh.config.DbsConfig
+	return nil
 }

@@ -15,5 +15,8 @@ func main() {
 		log.Fatalf("Error occurred on getting config: %e", err)
 	}
 
-	fga.Handle()
+	err = fga.Handle()
+	if err != nil {
+		log.Fatalf("Error occurred while managing resources: %e", err)
+	}
 }

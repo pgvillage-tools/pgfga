@@ -32,5 +32,5 @@ LABEL MAINTAINER=nibble-it
 WORKDIR /
 COPY --from=builder /workspace/pgfga ./
 
-ENTRYPOINT ["/pgfga", "-c"]
+ENTRYPOINT ["/pgfga"]
 CMD /etc/pgfga/config.yaml
