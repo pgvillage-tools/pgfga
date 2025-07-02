@@ -36,6 +36,8 @@ linters:
         - name: context-as-argument
         #- name: cyclomatic
         - name: dot-imports
+          exclude:
+            - '**/*_test.go'
           arguments:
             - allowedPackages:
                 - github.com/onsi/ginkgo/v2

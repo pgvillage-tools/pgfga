@@ -15,15 +15,18 @@ local-prefix: 'github.com/pgvillage-tools/pgfga'
 threshold:
   # (optional; default 0)
   # Minimum coverage percentage required for individual files.
-  file: 0
+  #  file: 70
+  file: 70
 
   # (optional; default 0)
   # Minimum coverage percentage required for each package.
-  package: 0
+  # package: 80
+  package: 80
 
   # (optional; default 0)
   # Minimum overall project coverage percentage required.
-  total: 2
+  #  total: 80
+  total: 7
 
 # Holds regexp rules which will override thresholds for matched files or packages
 # using their paths.
@@ -36,6 +39,69 @@ override:
   # (default is 80, as configured above in this example).
   #- path: ^pkg/lib/foo$
   #  threshold: 100
+
+  - path: internal/config/config.go
+    threshold: 0.0
+  - path: internal/config
+    threshold: 0.0
+
+  - path: internal/handler/pgfga_handler.go
+    threshold: 0.0
+  - path: internal/handler
+    threshold: 0.0
+
+  - path: pkg/ldap/config.go
+    threshold: 0.0
+  - path: pkg/ldap/credential.go
+    threshold: 62.9
+  - path: pkg/ldap/handler.go
+    threshold: 0.0
+  - path: pkg/ldap/main.go
+    threshold: 0.0
+  - path: pkg/ldap/member.go
+    threshold: 0.0
+  - path: pkg/ldap/member_type.go
+    threshold: 0.0
+  - path: pkg/ldap/membership.go
+    threshold: 0.0
+  - path: pkg/ldap/utils.go
+    threshold: 0.0
+  - path: pkg/ldap
+    threshold: 13.3
+
+  - path: pkg/pg/conn.go
+    threshold: 29.6
+  - path: pkg/pg/database.go
+    threshold: 0.0
+  - path: pkg/pg/extension.go
+    threshold: 0.0
+  - path: pkg/pg/grants.go
+    threshold: 0.0
+  - path: pkg/pg/handler.go
+    threshold: 0.0
+  - path: pkg/pg/main.go
+    threshold: 0.0
+  - path: pkg/pg/replicationslot.go
+    threshold: 0.0
+  - path: pkg/pg/role.go
+    threshold: 0.0
+  - path: pkg/pg/roleoption.go
+    threshold: 11.5
+  - path: pkg/pg/roleoption_list.go
+    threshold: 66.7
+  - path: pkg/pg/roleoption_map.go
+    threshold: 0.0
+  - path: pkg/pg/state.go
+    threshold: 0.0
+  - path: pkg/pg/utils.go
+    threshold: 0.0
+  - path: pkg/pg
+    threshold: 6.6
+
+  - path: pkg/utils/main.go
+    threshold: 0.0
+  - path: pkg/utils
+    threshold: 0.0
 
 # Holds regexp rules which will exclude matched files or packages
 # from coverage statistics.
