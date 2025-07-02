@@ -7,7 +7,7 @@ require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.37.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.18.1
 	gopkg.in/yaml.v2 v2.4.0
 )
