@@ -27,7 +27,7 @@ jobs:
               - go.mod
               - go.sum
               - '**.go'
-              - '.github/workflows/ci-build.yaml'
+              - .github/workflows/ci-run-on-pr.yaml
 
   check-go:
     name: Ensure Go modules synchronicity
