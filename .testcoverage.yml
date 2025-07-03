@@ -98,11 +98,6 @@ override:
   - path: pkg/pg
     threshold: 6.6
 
-  - path: pkg/utils/main.go
-    threshold: 0.0
-  - path: pkg/utils
-    threshold: 0.0
-
 # Holds regexp rules which will exclude matched files or packages
 # from coverage statistics.
 exclude:
