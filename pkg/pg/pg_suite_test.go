@@ -1,13 +1,15 @@
-package pg_test
+package pg
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 )
 
 func TestPg(t *testing.T) {
+	log = zap.NewNop().Sugar()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Pg Suite")
 }

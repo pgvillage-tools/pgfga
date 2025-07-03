@@ -1,16 +1,14 @@
-package pg_test
+package pg
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/pgvillage-tools/pgfga/pkg/pg"
 )
 
 var _ = Describe("Dsn", func() {
-	var myDSN pg.ConnParams
+	var myDSN ConnParams
 	BeforeEach(func() {
-		myDSN = pg.ConnParams{"host": "myhost", "port": "5433"}
+		myDSN = ConnParams{"host": "myhost", "port": "5433"}
 	})
 	Describe("When instantiating a new DSN object", func() {
 		Context("with a few keys set", func() {

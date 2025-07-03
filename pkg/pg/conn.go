@@ -14,6 +14,8 @@ import (
 type Conn struct {
 	connParams ConnParams
 	conn       *pgx.Conn
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // NewConn returns a connection with connection parameters set
@@ -83,11 +85,28 @@ func (c *Conn) Connect() (err error) {
 		}
 		c.conn = nil
 	}
-	c.conn, err = pgx.Connect(context.Background(), c.ConnParams().String())
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	c.conn, err = pgx.Connect(c.ctx, c.ConnParams().String())
 	if err != nil {
 		c.conn = nil
 		return err
 	}
+	return nil
+}
+
+// Close can be used to disconnect from Postgres.
+func (c *Conn) Close() (err error) {
+	if c.conn == nil {
+		return nil
+	}
+	if c.conn.IsClosed() {
+		return nil
+	}
+	err = c.conn.Close(c.ctx)
+	if err != nil {
+		return err
+	}
+	c.cancel()
 	return nil
 }
 
@@ -97,7 +116,7 @@ func (c *Conn) runQueryExists(query string, args ...any) (exists bool, err error
 		return false, err
 	}
 	var answer string
-	err = c.conn.QueryRow(context.Background(), query, args...).Scan(&answer)
+	err = c.conn.QueryRow(c.ctx, query, args...).Scan(&answer)
 	if err == pgx.ErrNoRows {
 		return false, nil
 	}
@@ -112,7 +131,7 @@ func (c *Conn) runQueryExec(query string, args ...any) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = c.conn.Exec(context.Background(), query, args...)
+	_, err = c.conn.Exec(c.ctx, query, args...)
 	return err
 }
 
@@ -122,7 +141,7 @@ func (c *Conn) runQueryGetOneField(query string, args ...any) (answer string, er
 		return "", err
 	}
 
-	err = c.conn.QueryRow(context.Background(), query, args...).Scan(&answer)
+	err = c.conn.QueryRow(c.ctx, query, args...).Scan(&answer)
 	if err != nil {
 		return "", fmt.Errorf("runQueryGetOneField (%s) failed: %v", query, err)
 	}
