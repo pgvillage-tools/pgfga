@@ -25,7 +25,8 @@ func (d Databases) reconcile(primaryConn Conn) (err error) {
 
 // reconcile can be used to grant or revoke all Databases.
 func (d Databases) finalize(primaryConn Conn) (err error) {
-	for _, db := range d {
+	for dbName, db := range d {
+		db.name = dbName
 		err := db.drop(primaryConn)
 		if err != nil {
 			return err
@@ -85,12 +86,13 @@ func (d *Database) reconcilePrimaryCon(conn Conn) (err error) {
 // reconcile can be used to grant or revoke all Roles.
 func (d *Database) reconcileDbCon(primaryConn Conn) (err error) {
 	dbConn := primaryConn.SwitchDB(d.name)
-	for _, recFunc := range []func(Conn) error{
+	defer dbConn.Close()
+	for _, recFunc := range []func(*Conn) error{
 		d.reconcileReadOnlyGrants,
 		d.reconcileReadWriteGrants,
 		d.reconcileExtensions,
 	} {
-		err := recFunc(dbConn)
+		err := recFunc(&dbConn)
 		if err != nil {
 			return err
 		}
@@ -169,11 +171,11 @@ func (d Database) create(conn Conn) (err error) {
 }
 
 // reconcileExtensions can be used to make sure the database exists
-func (d Database) reconcileExtensions(dbConn Conn) (err error) {
+func (d Database) reconcileExtensions(dbConn *Conn) (err error) {
 	return d.Extensions.reconcile(dbConn)
 }
 
-func (d Database) reconcileReadOnlyGrants(dbConn Conn) (err error) {
+func (d Database) reconcileReadOnlyGrants(dbConn *Conn) (err error) {
 	readOnlyRoleName := fmt.Sprintf("%s_readonly", d.name)
 	err = dbConn.Connect()
 	if err != nil {
@@ -208,7 +210,7 @@ func (d Database) reconcileReadOnlyGrants(dbConn Conn) (err error) {
 	return nil
 }
 
-func (d Database) reconcileReadWriteGrants(dbConn Conn) (err error) {
+func (d Database) reconcileReadWriteGrants(dbConn *Conn) (err error) {
 	readWriteRoleName := fmt.Sprintf("%s_readwrite", d.name)
 	err = dbConn.Connect()
 	if err != nil {

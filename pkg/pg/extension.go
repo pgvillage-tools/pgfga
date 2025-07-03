@@ -7,7 +7,7 @@ import (
 type extensions map[string]*extension
 
 // reconcile can be used to grant or revoke all Databases.
-func (e extensions) reconcile(dbConn Conn) (err error) {
+func (e extensions) reconcile(dbConn *Conn) (err error) {
 	for _, ext := range e {
 		err := ext.reconcile(dbConn)
 		if err != nil {
@@ -26,8 +26,8 @@ type extension struct {
 }
 
 // reconcile can be used to grant or revoke all Roles.
-func (e extension) reconcile(conn Conn) (err error) {
-	for _, recFunc := range []func(Conn) error{
+func (e extension) reconcile(conn *Conn) (err error) {
+	for _, recFunc := range []func(*Conn) error{
 		e.create,
 		e.drop,
 		e.reconcileSchema,
@@ -41,7 +41,7 @@ func (e extension) reconcile(conn Conn) (err error) {
 	return nil
 }
 
-func (e *extension) drop(dbConn Conn) (err error) {
+func (e *extension) drop(dbConn *Conn) (err error) {
 	if e.State != Absent {
 		return nil
 	}
@@ -54,7 +54,7 @@ func (e *extension) drop(dbConn Conn) (err error) {
 	return nil
 }
 
-func (e extension) create(conn Conn) (err error) {
+func (e extension) create(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (e extension) create(conn Conn) (err error) {
 	return nil
 }
 
-func (e extension) reconcileVersion(conn Conn) (err error) {
+func (e extension) reconcileVersion(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}
@@ -124,7 +124,7 @@ func (e extension) reconcileVersion(conn Conn) (err error) {
 	}
 	return nil
 }
-func (e extension) reconcileSchema(conn Conn) (err error) {
+func (e extension) reconcileSchema(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}

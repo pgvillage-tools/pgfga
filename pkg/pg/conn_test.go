@@ -1,16 +1,14 @@
-package pg_test
+package pg
 
 import (
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/pgvillage-tools/pgfga/pkg/pg"
 )
 
 var _ = Describe("Conn", func() {
-	var myConn pg.Conn
+	var myConn Conn
 	BeforeEach(func() {
-		myConn = pg.NewConn(pg.ConnParams{})
+		myConn = NewConn(ConnParams{})
 	})
 	Describe("Connecting", func() {
 		Context("with default connection parameters", func() {

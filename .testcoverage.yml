@@ -26,7 +26,7 @@ threshold:
   # (optional; default 0)
   # Minimum overall project coverage percentage required.
   #  total: 80
-  total: 7
+  total: 19.7
 
 # Holds regexp rules which will override thresholds for matched files or packages
 # using their paths.
@@ -71,8 +71,6 @@ override:
 
   - path: pkg/pg/conn.go
     threshold: 29.6
-  - path: pkg/pg/database.go
-    threshold: 0.0
   - path: pkg/pg/extension.go
     threshold: 0.0
   - path: pkg/pg/grants.go
