@@ -1,24 +1,11 @@
 package pg
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Grants is a list of grants
 type Grants []Grant
-
-// Append can be used to smart append, which means that a combination of grantee and granted can only occur once
-func (g Grants) Append(newGrant Grant) Grants {
-	var appended Grants
-	for _, grant := range g {
-		if grant.Grantee.Name == newGrant.Grantee.Name &&
-			grant.Granted.Name == newGrant.Granted.Name {
-			if grant.State != newGrant.State && grant.State != Allowed && newGrant.State != Allowed {
-				log.Panicf("%s is both Present and Absent", grant)
-			}
-		}
-		appended = append(appended, grant)
-	}
-	return append(appended, newGrant)
-}
 
 // reconcile can be used to grant or revoke all Roles.
 func (g Grants) reconcile(conn Conn) (err error) {
@@ -53,43 +40,52 @@ func (g Grant) String() string {
 	return fmt.Sprintf("grant of role %s to role %s", g.Granted.Name, g.Grantee.Name)
 }
 
-// reconcile can be used to grant or revoke all Roles.
-func (g Grant) grant(conn Conn) (err error) {
-	if g.State != Present {
-		return nil
-	}
+// grant can be used to grant all grants.
+func (g Grant) exists(conn Conn) (exists bool, err error) {
 	checkQry := `select granted.rolname granted_Role 
 		from pg_auth_members auth inner join pg_Roles 
 		granted on auth.Roleid = granted.oid inner join pg_Roles 
 		grantee on auth.member = grantee.oid where 
 		granted.rolname = $1 and grantee.rolname = $2`
-	exists, err := conn.runQueryExists(checkQry, g.Granted.Name, g.Grantee.Name)
+	return conn.runQueryExists(checkQry, g.Granted.Name, g.Grantee.Name)
+}
+
+// grant can be used to grant all grants.
+func (g Grant) grant(conn Conn) (err error) {
+	if g.State == Absent {
+		return nil
+	}
+	exists, err := g.exists(conn)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		err = conn.runQueryExec(fmt.Sprintf("GRANT %s TO %s", identifier(g.Granted.Name), identifier(g.Grantee.Name)))
-		if err != nil {
+	if exists {
+		log.Debugf("Role '%s' already granted to user '%s'", g.Granted.Name, g.Grantee.Name)
+		return nil
+	}
+	for _, role := range []Role{g.Granted, g.Grantee} {
+		if role.State == Absent {
+			return fmt.Errorf("role %s is absent and also granted", role.Name)
+		}
+		if err = role.create(conn); err != nil {
 			return err
 		}
-		log.Infof("Role '%s' successfully granted to user '%s'", g.Granted.Name, g.Grantee.Name)
-	} else {
-		log.Debugf("Role '%s' already granted to user '%s'", g.Granted.Name, g.Grantee.Name)
 	}
+	g.Granted.create(conn)
+	err = conn.runQueryExec(fmt.Sprintf("GRANT %s TO %s", identifier(g.Granted.Name), identifier(g.Grantee.Name)))
+	if err != nil {
+		return err
+	}
+	log.Infof("Role '%s' successfully granted to user '%s'", g.Granted.Name, g.Grantee.Name)
 	return nil
 }
 
 // RevokeRole can be used to revoke a Role from another Role.
 func (g Grant) revoke(conn Conn) (err error) {
-	if g.State != Absent {
+	if g.State == Present {
 		return nil
 	}
-	checkQry := `select granted.rolname granted_Role, grantee.rolname 
-		grantee_Role from pg_auth_members auth inner join pg_Roles 
-		granted on auth.Roleid = granted.oid inner join pg_Roles 
-		grantee on auth.member = grantee.oid where 
-		granted.rolname = $1 and grantee.rolname = $2 and grantee.rolname != CURRENT_USER`
-	exists, err := conn.runQueryExists(checkQry, g.Grantee, g.Granted)
+	exists, err := g.exists(conn)
 	if err != nil {
 		return err
 	}
@@ -97,8 +93,8 @@ func (g Grant) revoke(conn Conn) (err error) {
 		err = conn.runQueryExec(
 			fmt.Sprintf(
 				"REVOKE %s FROM %s",
-				identifier(g.Grantee.Name),
-				identifier(g.Granted.Name)),
+				identifier(g.Granted.Name),
+				identifier(g.Grantee.Name)),
 		)
 		if err != nil {
 			return err

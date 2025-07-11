@@ -116,7 +116,7 @@ func (r Role) reconcile(conn Conn) (err error) {
 }
 
 func (r *Role) drop(c Conn) (err error) {
-	if r.State != Absent {
+	if r.State == Present {
 		return nil
 	}
 	existsQuery := "SELECT rolname FROM pg_Roles WHERE rolname = $1 AND rolname != CURRENT_USER"
@@ -154,6 +154,9 @@ func (r *Role) drop(c Conn) (err error) {
 }
 
 func (r Role) create(conn Conn) (err error) {
+	if r.State == Absent {
+		return nil
+	}
 	exists, err := conn.runQueryExists("SELECT rolname FROM pg_Roles WHERE rolname = $1", r.Name)
 	if err != nil {
 		return err
