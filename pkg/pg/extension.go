@@ -45,6 +45,13 @@ func (e *extension) drop(dbConn *Conn) (err error) {
 	if e.State != Absent {
 		return nil
 	}
+	exists, err := e.exists(dbConn)
+	if err != nil {
+		return err
+	}
+	if exists {
+		log.Debugf("extension '%s'.'%s' already gone.", dbConn.DBName(), e.name)
+	}
 	err = dbConn.runQueryExec("DROP EXTENSION IF EXISTS " + identifier(e.name))
 	if err != nil {
 		return err
@@ -54,50 +61,64 @@ func (e *extension) drop(dbConn *Conn) (err error) {
 	return nil
 }
 
-func (e extension) create(conn *Conn) (err error) {
-	if e.State != Present {
-		return nil
-	}
-	// First let's see if the extension and version is available
-	exists, err := conn.runQueryExists("SELECT name FROM pg_available_extensions WHERE name = $1",
-		e.name)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("extension %s is not available", e.name)
-	}
-	exists, err = conn.runQueryExists(
+func (e extension) available(conn *Conn) (exists bool, err error) {
+	return conn.runQueryExists(
+		"SELECT name FROM pg_available_extensions WHERE name = $1", e.name)
+}
+
+func (e extension) versionAvailable(conn *Conn) (exists bool, err error) {
+	return conn.runQueryExists(
 		//revive:disable-next-line
 		"SELECT name FROM pg_available_extension_versions WHERE name = $1 AND version = $2",
 		e.name,
 		e.Version,
 	)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("version %s is not available for extension %s", e.Version, e.name)
-	}
-	exists, err = conn.runQueryExists("SELECT extname FROM pg_extension WHERE extname = $1", e.name)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		createQry := "CREATE EXTENSION IF NOT EXISTS " + identifier(e.name)
-		if e.Schema != "" {
-			createQry += " SCHEMA " + identifier(e.Schema)
-		}
-		if e.Version != "" {
-			createQry += " VERSION " + identifier(e.Version)
-		}
-		err = conn.runQueryExec(createQry)
-		if err != nil {
-			return err
-		}
-		log.Infof("extension '%s'.'%s' successfully created.", conn.DBName(), e.name)
+}
+
+func (e extension) exists(conn *Conn) (exists bool, err error) {
+	return conn.runQueryExists(
+		"SELECT extname FROM pg_extension WHERE extname = $1", e.name)
+}
+
+func (e extension) create(conn *Conn) (err error) {
+	if e.State != Present {
 		return nil
 	}
+	// First let's see if the extension and version is available
+	available, err := e.available(conn)
+	if err != nil {
+		return err
+	}
+	if !available {
+		return fmt.Errorf("extension %s is not available", e.name)
+	}
+	versionAvailable, err := e.versionAvailable(conn)
+	if err != nil {
+		return err
+	}
+	if !versionAvailable {
+		return fmt.Errorf("version %s is not available for extension %s", e.Version, e.name)
+	}
+	exists, err := e.exists(conn)
+	if err != nil {
+		return err
+	}
+	if exists {
+		log.Debugf("extension '%s'.'%s' already exists.", conn.DBName(), e.name)
+		return nil
+	}
+	createQry := "CREATE EXTENSION IF NOT EXISTS " + identifier(e.name)
+	if e.Schema != "" {
+		createQry += " SCHEMA " + identifier(e.Schema)
+	}
+	if e.Version != "" {
+		createQry += " VERSION " + identifier(e.Version)
+	}
+	err = conn.runQueryExec(createQry)
+	if err != nil {
+		return err
+	}
+	log.Infof("extension '%s'.'%s' successfully created.", conn.DBName(), e.name)
 	return nil
 }
 

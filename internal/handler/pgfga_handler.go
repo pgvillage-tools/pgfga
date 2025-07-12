@@ -51,12 +51,9 @@ func NewPgFgaHandler() (pfh *PgFgaHandler, err error) {
 
 	atom.SetLevel(cnf.GeneralConfig.LogLevel)
 
-	pfh = &PgFgaHandler{
-		config: cnf,
-	}
-
+	pfh = &PgFgaHandler{}
+	pfh.config = cnf
 	pfh.ldap = ldap.NewLdapHandler(cnf.LdapConfig)
-
 	pfh.pg = pg.NewPgHandler(cnf.PgDsn, cnf.StrictConfig, cnf.DbsConfig, cnf.Slots)
 
 	return pfh, nil

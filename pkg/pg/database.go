@@ -102,10 +102,10 @@ func (d *Database) reconcileDbCon(primaryConn Conn) (err error) {
 
 // Finalize can be used to drop the database
 func (d *Database) drop(conn Conn) (err error) {
-	if d.State != Absent {
+	if d.State == Present {
 		return nil
 	}
-	exists, err := conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
+	exists, err := d.exists(conn)
 	if err != nil {
 		return err
 	}
@@ -154,19 +154,29 @@ func (d Database) reconcileOwner(conn Conn) (err error) {
 	return nil
 }
 
+// exists can be used to check if the database exists
+func (d Database) exists(conn Conn) (exists bool, err error) {
+	return conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
+}
+
 // Create can be used to make sure the database exists
 func (d Database) create(conn Conn) (err error) {
-	exists, err := conn.runQueryExists("SELECT datname FROM pg_database WHERE datname = $1", d.name)
+	if d.State == Absent {
+		return nil
+	}
+	exists, err := d.exists(conn)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		err = conn.runQueryExec(fmt.Sprintf("CREATE DATABASE %s", identifier(d.name)))
-		if err != nil {
-			return err
-		}
-		log.Infof("Database '%s' successfully created", d.name)
+	if exists {
+		log.Debugf("Database '%s' already exists", d.name)
+		return nil
 	}
+	err = conn.runQueryExec(fmt.Sprintf("CREATE DATABASE %s", identifier(d.name)))
+	if err != nil {
+		return err
+	}
+	log.Infof("Database '%s' successfully created", d.name)
 	return nil
 }
 
