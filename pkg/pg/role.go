@@ -22,12 +22,13 @@ const (
 type Roles map[string]Role
 
 // AddRole will add a Role to the map, or merge the existing and this new one
-func (rs Roles) AddRole(r Role) {
-	role, exists := rs[r.Name]
+func (rs *Roles) AddRole(r Role) {
+	roles := *rs
+	role, exists := roles[r.Name]
 	if !exists {
-		rs[r.Name] = r
+		roles[r.Name] = r
 	}
-	rs[r.Name] = role.Merge(r)
+	roles[r.Name] = role.Merge(r)
 }
 
 // reconcile can be used to grant or revoke all Databases.
@@ -157,7 +158,7 @@ func (r Role) create(conn Conn) (err error) {
 	if r.State == Absent {
 		return nil
 	}
-	exists, err := conn.runQueryExists("SELECT rolname FROM pg_Roles WHERE rolname = $1", r.Name)
+	exists, err := r.exists(conn)
 	if err != nil {
 		return err
 	}
@@ -171,18 +172,28 @@ func (r Role) create(conn Conn) (err error) {
 	return nil
 }
 
+func (r Role) hasOptions(conn Conn, option RoleOption) (has bool, err error) {
+	return conn.runQueryExists(
+		"SELECT rolname FROM pg_Roles WHERE rolname = $1 AND "+option.SQL(),
+		r.Name)
+}
+
 func (r Role) reconcileRoleOptions(conn Conn) (err error) {
 	for option := range r.Options {
-		exists, err := conn.runQueryExists("SELECT rolname FROM pg_Roles WHERE rolname = $1 AND "+option.SQL(), r.Name)
+		hasOption, err := r.hasOptions(conn, option)
 		if err != nil {
 			return err
 		}
-		if !exists {
-			err = conn.runQueryExec(fmt.Sprintf("ALTER ROLE %s WITH "+option.String(), identifier(r.Name)))
+		if !hasOption {
+			err = conn.runQueryExec(fmt.Sprintf(
+				"ALTER ROLE %s WITH "+option.String(),
+				identifier(r.Name)),
+			)
 			if err != nil {
 				return err
 			}
-			log.Debugf("Role '%s' successfully altered with option '%s'", r.Name, option)
+			log.Debugf("Role '%s' successfully altered with option '%s'",
+				r.Name, option)
 		}
 	}
 	return nil
