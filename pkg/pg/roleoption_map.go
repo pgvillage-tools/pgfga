@@ -41,13 +41,6 @@ func (rom RoleOptionMap) Merge(other RoleOptionMap) RoleOptionMap {
 	return merged
 }
 
-// Add can be used to add a RoleOption to the map. For memory safety, we return the altered map (over moving pointers)
-// RoleOptions and their inverted counterpart are considered different and merged to separate key, value pairs.
-func (rom RoleOptionMap) Add(opt RoleOption) RoleOptionMap {
-	rom[opt.Absolute()] = opt.Enabled()
-	return rom
-}
-
 // AddAbsolute can be used to add a RoleOption to the map. For memory safety, we return the altered map (over moving
 // pointers). RoleOptions and their inverted counterpart are considered the same option and merged to one key, value
 // pair.

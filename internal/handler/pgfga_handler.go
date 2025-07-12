@@ -51,12 +51,9 @@ func NewPgFgaHandler() (pfh *PgFgaHandler, err error) {
 
 	atom.SetLevel(cnf.GeneralConfig.LogLevel)
 
-	pfh = &PgFgaHandler{
-		config: cnf,
-	}
-
+	pfh = &PgFgaHandler{}
+	pfh.config = cnf
 	pfh.ldap = ldap.NewLdapHandler(cnf.LdapConfig)
-
 	pfh.pg = pg.NewPgHandler(cnf.PgDsn, cnf.StrictConfig, cnf.DbsConfig, cnf.Slots)
 
 	return pfh, nil
@@ -80,43 +77,52 @@ func (pfh PgFgaHandler) Handle() error {
 	return pfh.pg.Reconcile()
 }
 
-func (pfh PgFgaHandler) handleLdapGroup(
+func (pfh *PgFgaHandler) handleLdapGroup(
 	userConfig config.FgaUserConfig,
-	userName string,
+	groupName string,
 	options pg.RoleOptionMap,
 ) (err error) {
-	log.Debugf("Configuring role from ldap for %s", userName)
+	log.Debugf("Configuring role from ldap for %s", groupName)
 	if userConfig.BaseDN == "" || userConfig.Filter == "" {
-		return fmt.Errorf("ldapbasedn and ldapfilter must be set for %s (auth: 'ldap-group')", userName)
+		return fmt.Errorf("ldapbasedn and ldapfilter must be set for %s (auth: 'ldap-group')", groupName)
 	}
 	baseGroup, err := pfh.ldap.GetMembers(userConfig.BaseDN, userConfig.Filter)
 	if err != nil {
 		return err
 	}
-	pfh.pg.Roles.AddRole(pg.Role{
+	group := pg.Role{
 		Name:    baseGroup.Name(),
 		Options: options,
 		State:   userConfig.State,
-	})
+	}
+	pfh.pg.Roles.AddRole(group)
+	if userConfig.State == pg.Present {
+		for _, granted := range userConfig.MemberOf {
+			pfh.pg.Grant(groupName, granted)
+		}
+	}
+	userOptions := options.Clone().AddAbsolute(pg.RoleLogin)
 	for _, ms := range baseGroup.MembershipTree() {
-		pfh.handleLdapUser(userConfig, ms.GetMember().Name(), &pg.RoleOptionMap{})
-		pfh.pg.Grant(ms.GetMember().Name(), baseGroup.Name())
+		user := pfh.pg.GetRole(ms.GetMember().Name())
+		user.Options = userOptions
+		user.State = userConfig.State
+		pfh.pg.Roles.AddRole(user)
+		pfh.pg.Grants = append(pfh.pg.Grants,
+			pg.Grant{Grantee: user, Granted: group, State: pg.Present},
+		)
 	}
 	return nil
 }
 
-func (pfh PgFgaHandler) handleLdapUser(
+func (pfh *PgFgaHandler) handleLdapUser(
 	userConfig config.FgaUserConfig,
 	userName string,
-	options *pg.RoleOptionMap,
+	options pg.RoleOptionMap,
 ) (err error) {
 	log.Debugf("Configuring user %s with %s", userName, userConfig.Auth)
-	options.AddAbsolute(pg.RoleLogin)
-	for _, opt := range userConfig.Options {
-		options.AddAbsolute(pg.RoleOption(opt))
-	}
+	options = options.AddAbsolute(pg.RoleLogin)
 	user := pfh.pg.GetRole(userName)
-	user.Options = *options
+	user.Options = options
 	user.State = userConfig.State
 	pfh.pg.Roles.AddRole(user)
 	if userConfig.State == pg.Present {
@@ -127,24 +133,27 @@ func (pfh PgFgaHandler) handleLdapUser(
 	return nil
 }
 
-func (pfh PgFgaHandler) handlePasswordUser(
+func (pfh *PgFgaHandler) handlePasswordUser(
 	userConfig config.FgaUserConfig,
 	userName string,
-	options *pg.RoleOptionMap,
+	options pg.RoleOptionMap,
 ) (err error) {
-	options.AddAbsolute(pg.RoleLogin)
+	options = options.AddAbsolute(pg.RoleLogin)
 	user := pfh.pg.GetRole(userName)
-	user.Options = *options
+	user.Options = options
 	user.State = userConfig.State
 	pfh.pg.Roles.AddRole(user)
 	if userConfig.State == pg.Present {
 		user.Password = userConfig.Password
 		user.Expiry = userConfig.Expiry
+		for _, granted := range userConfig.MemberOf {
+			pfh.pg.Grant(userName, granted)
+		}
 	}
 	return nil
 }
 
-func (pfh PgFgaHandler) handleUsers() (err error) {
+func (pfh *PgFgaHandler) handleUsers() (err error) {
 	for userName, userConfig := range pfh.config.UserConfig {
 		options := pg.RoleOptionMap{}
 		for _, optionName := range userConfig.Options {
@@ -152,7 +161,7 @@ func (pfh PgFgaHandler) handleUsers() (err error) {
 			if err = option.Validate(); err != nil {
 				return err
 			}
-			options.AddAbsolute(option)
+			options = options.AddAbsolute(option)
 		}
 		switch userConfig.Auth {
 		case "ldap-group":
@@ -160,11 +169,11 @@ func (pfh PgFgaHandler) handleUsers() (err error) {
 				return err
 			}
 		case "ldap-user", "clientcert":
-			if err = pfh.handleLdapUser(userConfig, userName, &options); err != nil {
+			if err = pfh.handleLdapUser(userConfig, userName, options); err != nil {
 				return err
 			}
 		case "password", "md5":
-			if err = pfh.handlePasswordUser(userConfig, userName, &options); err != nil {
+			if err = pfh.handlePasswordUser(userConfig, userName, options); err != nil {
 				return err
 			}
 		default:
@@ -174,7 +183,7 @@ func (pfh PgFgaHandler) handleUsers() (err error) {
 	return nil
 }
 
-func (pfh PgFgaHandler) handleRoles() (err error) {
+func (pfh *PgFgaHandler) handleRoles() (err error) {
 	for roleName, roleConfig := range pfh.config.Roles {
 		options := pg.RoleOptionMap{}
 		for _, optionName := range roleConfig.Options {

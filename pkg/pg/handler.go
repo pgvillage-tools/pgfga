@@ -64,7 +64,7 @@ func (h *Handler) GetRole(roleName string) (r Role) {
 func (h *Handler) Grant(grantee string, granted string) {
 	grantedRole := h.GetRole(granted)
 	granteeRole := h.GetRole(grantee)
-	h.Grants = h.Grants.Append(Grant{Grantee: granteeRole, Granted: grantedRole})
+	h.Grants = append(h.Grants, Grant{Grantee: granteeRole, Granted: grantedRole})
 }
 
 // Reconcile can be used to reconcile all objects as defined in this handler object

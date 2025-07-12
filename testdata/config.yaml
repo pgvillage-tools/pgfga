@@ -50,6 +50,7 @@ users:
     ldapfilter: '(objectclass=*)'
     memberof:
     - opex
+    - ldap
   dbauser:
     auth: ldap-user
     memberof:

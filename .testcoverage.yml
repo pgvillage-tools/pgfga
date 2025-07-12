@@ -73,8 +73,6 @@ override:
     threshold: 29.6
   - path: pkg/pg/extension.go
     threshold: 0.0
-  - path: pkg/pg/grants.go
-    threshold: 0.0
   - path: pkg/pg/handler.go
     threshold: 0.0
   - path: pkg/pg/main.go
