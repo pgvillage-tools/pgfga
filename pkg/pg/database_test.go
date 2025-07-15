@@ -35,10 +35,6 @@ var _ = Describe("Conn", Ordered, func() {
 
 	BeforeAll(func() {
 		myConn = NewConn(ConnParams{})
-		for _, ownerName := range []string{shouldExist, dbName, shouldNotExist} {
-			owner := Role{Name: ownerName}
-			Ω(owner.create(myConn)).NotTo(HaveOccurred())
-		}
 	})
 	BeforeEach(func() {
 	})

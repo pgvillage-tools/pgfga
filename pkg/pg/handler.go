@@ -24,8 +24,10 @@ func NewPgHandler(connParams ConnParams, options StrictOptions, databases Databa
 		Slots:         replicationSlots{},
 	}
 	for _, slotName := range slots {
-		slot := newSlot(slotName)
-		ph.Slots[slotName] = *slot
+		ph.Slots[slotName] = replicationSlot{
+			name:  slotName,
+			State: Present,
+		}
 	}
 	ph.setDefaults()
 	return ph
@@ -43,7 +45,6 @@ func (h *Handler) getPrimaryConnection() (dbConn Conn) {
 func (h *Handler) setDefaults() {
 	for name, db := range h.Databases {
 		db.name = name
-		db.setDefaults()
 	}
 	for name, rs := range h.Slots {
 		rs.name = name

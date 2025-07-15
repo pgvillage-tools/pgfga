@@ -29,21 +29,19 @@ type replicationSlot struct {
 	State State `yaml:"state"`
 }
 
-func newSlot(name string) (rs *replicationSlot) {
-	rs = &replicationSlot{
-		name:  name,
-		State: Present,
-	}
-	return rs
+func (rs replicationSlot) exists(conn Conn) (exists bool, err error) {
+	return conn.runQueryExists("SELECT slot_name FROM pg_replication_slots WHERE slot_name = $1", rs.name)
 }
-
 func (rs replicationSlot) drop(conn Conn) (err error) {
-	exists, err := conn.runQueryExists("SELECT slot_name FROM pg_replication_slots WHERE slot_name = $1", rs.name)
+	if rs.State == Present {
+		return nil
+	}
+	exists, err := rs.exists(conn)
 	if err != nil {
 		return err
 	}
 	if exists {
-		err = conn.runQueryExec("SELECT pg_drop_physical_replication_slot($1)", rs.name)
+		err = conn.runQueryExec("SELECT pg_drop_replication_slot($1)", rs.name)
 		if err != nil {
 			return err
 		}
@@ -53,7 +51,10 @@ func (rs replicationSlot) drop(conn Conn) (err error) {
 }
 
 func (rs replicationSlot) create(conn Conn) (err error) {
-	exists, err := conn.runQueryExists("SELECT slot_name FROM pg_replication_slots WHERE slot_name = $1", rs.name)
+	if rs.State == Absent {
+		return nil
+	}
+	exists, err := rs.exists(conn)
 	if err != nil {
 		return err
 	}

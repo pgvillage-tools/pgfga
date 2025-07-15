@@ -4,11 +4,12 @@ import (
 	"fmt"
 )
 
-type extensions map[string]*extension
+type extensions map[string]extension
 
 // reconcile can be used to grant or revoke all Databases.
 func (e extensions) reconcile(dbConn *Conn) (err error) {
-	for _, ext := range e {
+	for extName, ext := range e {
+		ext.name = extName
 		err := ext.reconcile(dbConn)
 		if err != nil {
 			return err
