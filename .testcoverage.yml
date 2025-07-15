@@ -77,8 +77,6 @@ override:
     threshold: 0.0
   - path: pkg/pg/main.go
     threshold: 0.0
-  - path: pkg/pg/replicationslot.go
-    threshold: 0.0
   - path: pkg/pg/role.go
     threshold: 0.0
   - path: pkg/pg/roleoption.go
