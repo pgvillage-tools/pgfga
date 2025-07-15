@@ -33,7 +33,8 @@ func (rs *Roles) AddRole(r Role) {
 
 // reconcile can be used to grant or revoke all Databases.
 func (rs Roles) reconcile(primaryConn Conn) (err error) {
-	for _, role := range rs {
+	for roleName, role := range rs {
+		role.Name = roleName
 		err := role.reconcile(primaryConn)
 		if err != nil {
 			return err
@@ -44,7 +45,8 @@ func (rs Roles) reconcile(primaryConn Conn) (err error) {
 
 // reconcile can be used to grant or revoke all Databases.
 func (rs Roles) finalize(primaryConn Conn) (err error) {
-	for _, role := range rs {
+	for roleName, role := range rs {
+		role.Name = roleName
 		err := role.drop(primaryConn)
 		if err != nil {
 			return err
