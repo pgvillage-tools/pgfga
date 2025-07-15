@@ -51,18 +51,15 @@ func NewDatabase(name string, owner string) (d Database) {
 		Owner:      owner,
 		Extensions: make(extensions),
 	}
-	d.setDefaults()
 	return d
 }
 
 // setDefaults is called to set all defaults for databases created from yaml
-func (d *Database) setDefaults() {
+func (d *Database) getOwner() string {
 	if d.Owner == "" {
-		d.Owner = d.name
+		return d.name
 	}
-	for name, ext := range d.Extensions {
-		ext.name = name
-	}
+	return d.Owner
 }
 
 // reconcile can be used to grant or revoke all Roles.
@@ -71,6 +68,9 @@ func (d *Database) reconcilePrimaryCon(conn Conn) (err error) {
 		return nil
 	}
 	for _, recFunc := range []func(Conn) error{
+		func(conn Conn) error {
+			return Role{Name: d.getOwner(), State: Present}.create(conn)
+		},
 		d.create,
 		d.reconcileOwner,
 		d.reconcileDbCon,
@@ -182,6 +182,9 @@ func (d Database) create(conn Conn) (err error) {
 
 // reconcileExtensions can be used to make sure the database exists
 func (d Database) reconcileExtensions(dbConn *Conn) (err error) {
+	if d.Extensions == nil {
+		return nil
+	}
 	return d.Extensions.reconcile(dbConn)
 }
 

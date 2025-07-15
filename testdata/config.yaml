@@ -41,7 +41,7 @@ databases:
     extensions:
       pg_stat_statements:
         schema: public
-        version: 1.5
+        version: 1.8
 
 users:
   dbateam:
@@ -49,31 +49,31 @@ users:
     ldapbasedn: 'cn=dba,ou=groups,dc=pgfga,dc=org'
     ldapfilter: '(objectclass=*)'
     memberof:
-    - opex
-    - ldap
+      - opex
+      - ldap
   dbauser:
     auth: ldap-user
     memberof:
-    - dba
+      - dba
     options:
-    - SUPERUSER
+      - SUPERUSER
   backup_user:
     expiry: 2022-01-01
     auth: password
     password: bckpa$$w0rd
     memberof:
-    - backup
+      - backup
 
 roles:
   dba:
     options:
-    - SUPERUSER
+      - SUPERUSER
     memberof:
-    - opex
+      - opex
     strict: true
   backup:
     options:
-    - SUPERUSER
+      - SUPERUSER
 
 replication_slots:
   - backup
