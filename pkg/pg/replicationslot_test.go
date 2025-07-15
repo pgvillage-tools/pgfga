@@ -26,10 +26,8 @@ var _ = Describe("Pkg/Pg/Replicationslot", Ordered, func() {
 		myConn Conn
 	)
 	repSlots := replicationSlots{
-		shouldExist: replicationSlot{
-			name: shouldExist, State: Present},
-		shouldNotExist: replicationSlot{
-			name: shouldNotExist, State: Absent},
+		shouldExist:    replicationSlot{State: Present},
+		shouldNotExist: replicationSlot{State: Absent},
 	}
 
 	BeforeAll(func() {
