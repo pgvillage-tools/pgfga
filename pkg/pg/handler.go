@@ -43,7 +43,6 @@ func (h *Handler) getPrimaryConnection() (dbConn Conn) {
 func (h *Handler) setDefaults() {
 	for name, db := range h.Databases {
 		db.name = name
-		db.setDefaults()
 	}
 	for name, rs := range h.Slots {
 		rs.name = name
