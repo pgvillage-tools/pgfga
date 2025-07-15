@@ -4,7 +4,8 @@ type replicationSlots map[string]replicationSlot
 
 // reconcile can be used to grant or revoke all Databases.
 func (rs replicationSlots) reconcile(primaryConn Conn) (err error) {
-	for _, slot := range rs {
+	for slotName, slot := range rs {
+		slot.name = slotName
 		err := slot.create(primaryConn)
 		if err != nil {
 			return err
@@ -15,7 +16,8 @@ func (rs replicationSlots) reconcile(primaryConn Conn) (err error) {
 
 // reconcile can be used to grant or revoke all Databases.
 func (rs replicationSlots) finalize(primaryConn Conn) (err error) {
-	for _, slot := range rs {
+	for slotName, slot := range rs {
+		slot.name = slotName
 		err := slot.drop(primaryConn)
 		if err != nil {
 			return err

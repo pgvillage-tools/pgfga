@@ -99,7 +99,7 @@ func (r Role) exists(c Conn) (exists bool, err error) {
 
 // reconcile can be used to grant or revoke all Roles.
 func (r Role) reconcile(conn Conn) (err error) {
-	if r.State != Present {
+	if r.State == Absent {
 		return nil
 	}
 	for _, recFunc := range []func(Conn) error{

@@ -6,27 +6,21 @@ import (
 )
 
 func dbExists(conn Conn, dbName string) {
-	exists, err := conn.runQueryExists(
-		"select datname from pg_database where datname = $1",
-		dbName,
-	)
+	exists, err := Database{name: dbName}.exists(conn)
 	Ω(err).NotTo(HaveOccurred())
 	Ω(exists).To(BeTrue())
 }
 
 func dbNotExists(conn Conn, dbName string) {
-	exists, err := conn.runQueryExists(
-		"select datname from pg_database where datname = $1",
-		dbName,
-	)
+	exists, err := Database{name: dbName}.exists(conn)
 	Ω(err).NotTo(HaveOccurred())
 	Ω(exists).NotTo(BeTrue())
 }
 
 var _ = Describe("Conn", Ordered, func() {
 	const (
-		shouldExist    = "should-exist"
-		shouldNotExist = "should-not-exist"
+		shouldExist    = "db-should-exist"
+		shouldNotExist = "db-should-not-exist"
 		dbName         = "dbtest"
 	)
 	var (
