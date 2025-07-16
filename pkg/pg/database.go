@@ -39,8 +39,8 @@ func (d Databases) finalize(primaryConn Conn) (err error) {
 type Database struct {
 	// for DB's created from yaml, handler and name are set by the pg.Handler
 	name       string
-	Owner      string     `yaml:"Owner"`
-	Extensions extensions `yaml:"extensions"`
+	Owner      string     `yaml:"owner"`
+	Extensions Extensions `yaml:"extensions"`
 	Schemas    Schemas    `yaml:"schemas"`
 	State      State      `yaml:"state"`
 }
@@ -50,7 +50,7 @@ func NewDatabase(name string, owner string) (d Database) {
 	d = Database{
 		name:       name,
 		Owner:      owner,
-		Extensions: make(extensions),
+		Extensions: make(Extensions),
 	}
 	return d
 }
