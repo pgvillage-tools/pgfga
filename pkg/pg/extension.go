@@ -4,10 +4,12 @@ import (
 	"fmt"
 )
 
-type extensions map[string]extension
+// Extensions represent a list of defined extensions to be installed or
+// uninstalled in a database
+type Extensions map[string]Extension
 
 // reconcile can be used to grant or revoke all Databases.
-func (e extensions) reconcile(dbConn *Conn) (err error) {
+func (e Extensions) reconcile(dbConn *Conn) (err error) {
 	for extName, ext := range e {
 		ext.name = extName
 		err := ext.reconcile(dbConn)
@@ -18,7 +20,8 @@ func (e extensions) reconcile(dbConn *Conn) (err error) {
 	return nil
 }
 
-type extension struct {
+// Extension represents an extension installed in a database
+type Extension struct {
 	// name and db are set by the database
 	name    string
 	Schema  string `yaml:"schema"`
@@ -27,7 +30,7 @@ type extension struct {
 }
 
 // reconcile can be used to grant or revoke all Roles.
-func (e extension) reconcile(conn *Conn) (err error) {
+func (e Extension) reconcile(conn *Conn) (err error) {
 	for _, recFunc := range []func(*Conn) error{
 		e.create,
 		e.drop,
@@ -42,7 +45,7 @@ func (e extension) reconcile(conn *Conn) (err error) {
 	return nil
 }
 
-func (e *extension) drop(dbConn *Conn) (err error) {
+func (e *Extension) drop(dbConn *Conn) (err error) {
 	if e.State != Absent {
 		return nil
 	}
@@ -51,65 +54,71 @@ func (e *extension) drop(dbConn *Conn) (err error) {
 		return err
 	}
 	if exists {
-		log.Debugf("extension '%s'.'%s' already gone.", dbConn.DBName(), e.name)
+		log.Debugf("Extension '%s'.'%s' already gone.", dbConn.DBName(), e.name)
 	}
 	err = dbConn.runQueryExec("DROP EXTENSION IF EXISTS " + identifier(e.name))
 	if err != nil {
 		return err
 	}
 	e.State = Absent
-	log.Infof("extension '%s'.'%s' successfully dropped.", dbConn.DBName(), e.name)
+	log.Infof("Extension '%s'.'%s' successfully dropped.", dbConn.DBName(), e.name)
 	return nil
 }
 
-func (e extension) available(conn *Conn) (exists bool, err error) {
+func (e Extension) available(conn *Conn) (exists bool, err error) {
 	return conn.runQueryExists(
-		"SELECT name FROM pg_available_extensions WHERE name = $1", e.name)
+		"SELECT name FROM pg_available_Extensions WHERE name = $1", e.name)
 }
 
-func (e extension) versionAvailable(conn *Conn) (exists bool, err error) {
+func (e Extension) versionAvailable(conn *Conn) (exists bool, err error) {
 	return conn.runQueryExists(
 		//revive:disable-next-line
-		"SELECT name FROM pg_available_extension_versions WHERE name = $1 AND version = $2",
+		"SELECT name FROM pg_available_Extension_versions WHERE name = $1 AND version = $2",
 		e.name,
 		e.Version,
 	)
 }
 
-func (e extension) exists(conn *Conn) (exists bool, err error) {
+func (e Extension) exists(conn *Conn) (exists bool, err error) {
 	return conn.runQueryExists(
-		"SELECT extname FROM pg_extension WHERE extname = $1", e.name)
+		"SELECT extname FROM pg_Extension WHERE extname = $1", e.name)
 }
 
-func (e extension) create(conn *Conn) (err error) {
+func (e Extension) create(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}
-	// First let's see if the extension and version is available
+	// First let's see if the Extension and version is available
 	available, err := e.available(conn)
 	if err != nil {
 		return err
 	}
 	if !available {
-		return fmt.Errorf("extension %s is not available", e.name)
+		return fmt.Errorf("Extension %s is not available", e.name)
 	}
-	versionAvailable, err := e.versionAvailable(conn)
-	if err != nil {
-		return err
-	}
-	if !versionAvailable {
-		return fmt.Errorf("version %s is not available for extension %s", e.Version, e.name)
+	if e.Version != "" {
+		versionAvailable, err := e.versionAvailable(conn)
+		if err != nil {
+			return err
+		}
+		if !versionAvailable {
+			return fmt.Errorf("version %s is not available for Extension %s", e.Version, e.name)
+		}
 	}
 	exists, err := e.exists(conn)
 	if err != nil {
 		return err
 	}
 	if exists {
-		log.Debugf("extension '%s'.'%s' already exists.", conn.DBName(), e.name)
+		log.Debugf("Extension '%s'.'%s' already exists.", conn.DBName(), e.name)
 		return nil
 	}
 	createQry := "CREATE EXTENSION IF NOT EXISTS " + identifier(e.name)
 	if e.Schema != "" {
+		err = Schema{name: e.Schema}.create(conn)
+		if err != nil {
+			return err
+		}
 		createQry += " SCHEMA " + identifier(e.Schema)
 	}
 	if e.Version != "" {
@@ -119,19 +128,22 @@ func (e extension) create(conn *Conn) (err error) {
 	if err != nil {
 		return err
 	}
-	log.Infof("extension '%s'.'%s' successfully created.", conn.DBName(), e.name)
+	log.Infof("Extension '%s'.'%s' successfully created.", conn.DBName(), e.name)
 	return nil
 }
 
-func (e extension) reconcileVersion(conn *Conn) (err error) {
+func (e Extension) currentVersion(conn *Conn) (curSchema string, err error) {
+	return conn.runQueryGetOneField(
+		"SELECT extversion FROM pg_Extension WHERE extname = $1",
+		e.name)
+}
+
+func (e Extension) reconcileVersion(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}
 	if e.Version != "" {
-		currentVersion, err := conn.runQueryGetOneField(
-			//revive:disable-next-line
-			"SELECT extversion FROM pg_extension WHERE extname = $1",
-			e.name)
+		currentVersion, err := e.currentVersion(conn)
 		if err != nil {
 			return err
 		}
@@ -141,31 +153,40 @@ func (e extension) reconcileVersion(conn *Conn) (err error) {
 			if err != nil {
 				return err
 			}
-			log.Infof("extension '%s'.'%s' successfully updated to version '%s'", conn.DBName(), e.name, e.Version)
+			log.Infof("Extension '%s'.'%s' successfully updated to version '%s'", conn.DBName(), e.name, e.Version)
 		}
 	}
 	return nil
 }
-func (e extension) reconcileSchema(conn *Conn) (err error) {
+
+func (e Extension) currentSchema(conn *Conn) (curSchema string, err error) {
+	qry := `SELECT pg_namespace.nspname 
+				FROM pg_Extension INNER JOIN pg_namespace
+				ON extnamespace = pg_namespace.oid
+				WHERE extname = $1;`
+	return conn.runQueryGetOneField(qry, e.name)
+}
+
+func (e Extension) reconcileSchema(conn *Conn) (err error) {
 	if e.State != Present {
 		return nil
 	}
 	if e.Schema != "" {
-		qry := `SELECT pg_namespace.nspname 
-				FROM pg_extension INNER JOIN pg_namespace
-				ON extnamespace = pg_namespace.oid
-				WHERE extname = $1;`
-		currentSchema, err := conn.runQueryGetOneField(qry, e.name)
+		currentSchema, err := e.currentSchema(conn)
 		if err != nil {
 			return err
 		}
 		if currentSchema != e.Schema {
+			err = Schema{name: e.Schema, State: Present}.create(conn)
+			if err != nil {
+				return err
+			}
 			err = conn.runQueryExec(fmt.Sprintf("ALTER EXTENSION %s SET SCHEMA %s",
 				identifier(e.name), identifier(e.Schema)))
 			if err != nil {
 				return err
 			}
-			log.Infof("extension '%s'.'%s' successfully moved to schema '%s'", conn.DBName(), e.name, e.Schema)
+			log.Infof("Extension '%s'.'%s' successfully moved to schema '%s'", conn.DBName(), e.name, e.Schema)
 		}
 	}
 	return nil

@@ -39,8 +39,9 @@ func (d Databases) finalize(primaryConn Conn) (err error) {
 type Database struct {
 	// for DB's created from yaml, handler and name are set by the pg.Handler
 	name       string
-	Owner      string     `yaml:"Owner"`
-	Extensions extensions `yaml:"extensions"`
+	Owner      string     `yaml:"owner"`
+	Extensions Extensions `yaml:"extensions"`
+	Schemas    Schemas    `yaml:"schemas"`
 	State      State      `yaml:"state"`
 }
 
@@ -49,7 +50,7 @@ func NewDatabase(name string, owner string) (d Database) {
 	d = Database{
 		name:       name,
 		Owner:      owner,
-		Extensions: make(extensions),
+		Extensions: make(Extensions),
 	}
 	return d
 }
@@ -91,6 +92,7 @@ func (d *Database) reconcileDbCon(primaryConn Conn) (err error) {
 		d.reconcileReadOnlyGrants,
 		d.reconcileReadWriteGrants,
 		d.reconcileExtensions,
+		d.reconcileSchemas,
 	} {
 		err := recFunc(&dbConn)
 		if err != nil {
@@ -186,6 +188,14 @@ func (d Database) reconcileExtensions(dbConn *Conn) (err error) {
 		return nil
 	}
 	return d.Extensions.reconcile(dbConn)
+}
+
+// reconcileSchemas can be used to create schemas and set owners of schemas
+func (d Database) reconcileSchemas(dbConn *Conn) (err error) {
+	if d.Schemas == nil {
+		return nil
+	}
+	return d.Schemas.reconcile(dbConn)
 }
 
 func (d Database) reconcileReadOnlyGrants(dbConn *Conn) (err error) {
