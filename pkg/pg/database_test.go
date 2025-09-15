@@ -33,6 +33,19 @@ var _ = Describe("Conn", Ordered, func() {
 	BeforeEach(func() {
 	})
 	Describe("Managing databases", func() {
+		Context("creating a new database", func() {
+			const (
+				dbName = "my-new-db"
+				owner  = "richest-guy"
+			)
+			var db Database
+
+			It("should succeed", func() {
+				db = NewDatabase(dbName, owner)
+				Ω(db.Owner).To(Equal(owner))
+				Ω(db.name).To(Equal(dbName))
+			})
+		})
 		Context("reconciling", func() {
 			dbs := Databases{
 				dbName:         Database{State: Present},
