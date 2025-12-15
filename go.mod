@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.1
 	github.com/onsi/gomega v1.38.2
 	github.com/stretchr/testify v1.11.1
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
