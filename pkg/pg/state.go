@@ -39,7 +39,7 @@ func (s State) String() string {
 	return "Present"
 }
 
-// MarshalYAML marshals the enum as a quoted json string
+// MarshalYAML marshals the enum as a quoted yaml string
 func (s State) MarshalYAML() (any, error) {
 	return s.String(), nil
 }

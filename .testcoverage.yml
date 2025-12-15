@@ -26,7 +26,7 @@ threshold:
   # (optional; default 0)
   # Minimum overall project coverage percentage required.
   #  total: 80
-  total: 19.7
+  total: 42.7
 
 # Holds regexp rules which will override thresholds for matched files or packages
 # using their paths.
@@ -69,28 +69,20 @@ override:
   - path: pkg/ldap
     threshold: 13.3
 
-  - path: pkg/pg/conn.go
-    threshold: 29.6
-  - path: pkg/pg/extension.go
-    threshold: 0.0
   - path: pkg/pg/handler.go
     threshold: 0.0
   - path: pkg/pg/main.go
     threshold: 0.0
   - path: pkg/pg/role.go
-    threshold: 0.0
+    threshold: 37
   - path: pkg/pg/roleoption.go
     threshold: 11.5
   - path: pkg/pg/roleoption_list.go
     threshold: 66.7
   - path: pkg/pg/roleoption_map.go
     threshold: 0.0
-  - path: pkg/pg/state.go
-    threshold: 0.0
-  - path: pkg/pg/utils.go
-    threshold: 0.0
   - path: pkg/pg
-    threshold: 6.6
+    threshold: 58.2
 
 # Holds regexp rules which will exclude matched files or packages
 # from coverage statistics.
