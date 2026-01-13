@@ -13,7 +13,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend_any_changed }}
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.0.0
       - uses: tj-actions/changed-files@e0021407031f5be11a464abee9a0776171c79891 # v47.0.1
         id: filter
         with:
@@ -33,7 +33,7 @@ jobs:
       - codechanges
     steps:
       - name: Checkout code
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.0.0
       - name: Setup Golang
         uses: actions/setup-go@c0137caad775660c0844396c52da96e560aba63d # v5.0.2
       - name: Download all Go modules
@@ -55,7 +55,7 @@ jobs:
       pull-requests: read # for golangci/golangci-lint-action to fetch pull requests
     steps:
       - name: Checkout code
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.0.0
       - name: Setup Golang
         uses: actions/setup-go@c0137caad775660c0844396c52da96e560aba63d # v5.0.2
       - name: Run golangci-lint
@@ -71,7 +71,7 @@ jobs:
       - codechanges
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Golang
         uses: actions/setup-go@c0137caad775660c0844396c52da96e560aba63d # v5.0.2
       - name: update to docker-compose v2
@@ -98,7 +98,7 @@ jobs:
       - codechanges
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.1
       - name: Setup Golang
         uses: actions/setup-go@c0137caad775660c0844396c52da96e560aba63d # v5.0.2
       - name: update to docker-compose v2
