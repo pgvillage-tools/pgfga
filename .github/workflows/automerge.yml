@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   dependabot:
-    needs: [build] # <-- important!
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
