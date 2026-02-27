@@ -14,7 +14,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend_any_changed }}
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4.0.0
-      - uses: tj-actions/changed-files@e0021407031f5be11a464abee9a0776171c79891 # v47.0.1
+      - uses: tj-actions/changed-files@7dee1b0c1557f278e5c7dc244927139d78c0e22a # v47.0.4
         id: filter
         with:
           # Any file which is not under docs/ or is not a markdown file is counted as a backend file
