@@ -1,6 +1,6 @@
 module github.com/pgvillage-tools/pgfga
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.12
