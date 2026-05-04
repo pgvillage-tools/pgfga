@@ -6,7 +6,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/onsi/ginkgo/v2 v2.28.2
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/gomega v1.40.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
