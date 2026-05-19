@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/jackc/pgx/v4 v4.18.3
-	github.com/onsi/ginkgo/v2 v2.28.3
+	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.28.0
