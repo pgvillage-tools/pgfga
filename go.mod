@@ -3,7 +3,7 @@ module github.com/pgvillage-tools/pgfga
 go 1.26.0
 
 require (
-	github.com/go-ldap/ldap/v3 v3.4.14
+	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.44.0
