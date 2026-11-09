@@ -27,6 +27,7 @@ jobs:
               - go.mod
               - go.sum
               - '**.go'
+              - .testcoverage.yml
               - .github/workflows/ci-run-on-pr.yaml
 
   check-go:
