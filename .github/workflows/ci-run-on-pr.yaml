@@ -2,6 +2,8 @@ name: CI run on PR
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # The required checks also run in the merge queue: the tested commit is what lands on main
+  merge_group:
 
 permissions:
   contents: read
@@ -11,30 +13,9 @@ env:
   GOLANG_VERSION: '1.27'
 
 jobs:
-  codechanges:
-    if: ${{ github.event.pull_request.draft == false }}
-    runs-on: ubuntu-22.04
-    outputs:
-      backend: ${{ steps.filter.outputs.backend_any_changed }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.0.0
-      - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
-        id: filter
-        with:
-          # Any file which is not under docs/ or is not a markdown file is counted as a backend file
-          files_yaml: |
-            backend:
-              - go.mod
-              - go.sum
-              - '**.go'
-              - .github/workflows/ci-run-on-pr.yaml
-
   check-go:
     name: Ensure Go modules synchronicity
     runs-on: ubuntu-22.04
-    if: ${{ needs.codechanges.outputs.backend == 'true' && github.event.pull_request.draft == false}}
-    needs:
-      - codechanges
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.0.0
@@ -54,9 +35,6 @@ jobs:
   lint-go:
     name: Lint Go code
     runs-on: ubuntu-22.04
-    if: ${{ needs.codechanges.outputs.backend == 'true' && github.event.pull_request.draft == false}}
-    needs:
-      - codechanges
     permissions:
       contents: read # for actions/checkout to fetch code
       pull-requests: read # for golangci/golangci-lint-action to fetch pull requests
@@ -70,59 +48,52 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          # Built with go install (from the Go module proxy) instead of downloaded from GitHub releases
+          version: v2.15.0
+          install-mode: goinstall
           args: --verbose
 
   integrationtests:
     name: Run integration tests
     runs-on: ubuntu-22.04
-    if: ${{ needs.codechanges.outputs.backend == 'true' && github.event.pull_request.draft == false}}
-    needs:
-      - codechanges
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.0.0
       - name: Setup Golang
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GOLANG_VERSION }}
-      - name: update to docker-compose v2
+      # Uses the docker compose plugin of the runner, instead of a download from GitHub releases
+      - name: docker compose version
         run: |
-          sudo apt-get install -y curl
-          sudo curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          docker compose version
       - name: ldap and postgres
         run: |
-          docker-compose up -d ldap postgres
+          docker compose up -d ldap postgres
       - name: pgfga
         run: |
-          docker-compose up pgfga --exit-code-from pgfga
+          docker compose up pgfga --exit-code-from pgfga
       - name: pgtester
         run: |
-          docker-compose up pgtester pgtester --exit-code-from pgtester
+          docker compose up pgtester pgtester --exit-code-from pgtester
 
   unittests:
     name: Run unittests
     runs-on: ubuntu-22.04
-    if: ${{ needs.codechanges.outputs.backend == 'true' && github.event.pull_request.draft == false}}
-    needs:
-      - codechanges
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.0.0
       - name: Setup Golang
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GOLANG_VERSION }}
-      - name: update to docker-compose v2
+      # Uses the docker compose plugin of the runner, instead of a download from GitHub releases
+      - name: docker compose version
         run: |
-          sudo apt-get install -y curl
-          sudo curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+          docker compose version
       - name: ldap and postgres
         run: |
-          docker-compose up -d ldap postgres
+          docker compose up -d ldap postgres
       - name: Integration tests
         run: |
           make check-coverage
@@ -130,3 +101,25 @@ jobs:
           PGPASSWORD: postgres
           PGUSER: postgres
           PGHOST: 127.0.0.1
+
+  # The only required check of this workflow, so the ruleset doesn't change when jobs are added. It must always run,
+  # and only passes when every job it needs succeeded (a skipped required check would count as a pass).
+  ci-result:
+    name: CI result
+    runs-on: ubuntu-latest
+    needs:
+      - check-go
+      - lint-go
+      - integrationtests
+      - unittests
+    if: always()
+    steps:
+      - name: Evaluate the results
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "Results: ${RESULTS}"
+          if [ "$(echo "${RESULTS}" | jq -r 'all(. == "success")')" != true ]; then
+            echo "::error::All CI jobs must succeed"
+            exit 1
+          fi
