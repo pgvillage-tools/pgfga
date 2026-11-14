@@ -96,11 +96,16 @@ jobs:
           docker compose up -d ldap postgres
       - name: Integration tests
         run: |
-          make check-coverage
+          make test-coverage
         env:
           PGPASSWORD: postgres
           PGUSER: postgres
           PGHOST: 127.0.0.1
+      - name: Check test coverage
+        uses: vladopajic/go-test-coverage@6890500b00a7e5862e54662c04ea9fa7c799ce1e # v2.23.0
+        with:
+          config: .testcoverage.yml
+          profile: cover.out
 
   # The only required check of this workflow, so the ruleset doesn't change when jobs are added. It must always run,
   # and only passes when every job it needs succeeded (a skipped required check would count as a pass).
